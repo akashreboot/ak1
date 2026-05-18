@@ -30,12 +30,11 @@ profile_source:
 dre:
   search_url: "https://www.trec.texas.gov/license-search/"
 
-  # TREC quirk: the sidebar search form is REMOVED by JavaScript when the URL
-  # doesn't contain ?detail_id, AND the real search UI is a Vue SPA that reads
-  # URL params. So instead of fighting the form, we navigate directly to a
-  # pre-filled URL — the SPA runs the search server-side and renders results.
-  # {license_no} is interpolated by the activity before the runner is called.
-  search_url_template: "https://www.trec.texas.gov/license-search/?lic_name={license_no}&industry=Real+Estate"
+  # TREC's /license-search/ is a flaky React/Vite SPA that re-renders mid-load.
+  # The form's action attribute points to /apps/license-holder-search/ which is
+  # the Drupal-rendered results page (plain HTML, no SPA hydration loop).
+  # We navigate directly there with the license # baked into query params.
+  search_url_template: "https://www.trec.texas.gov/apps/license-holder-search/?lic_name={license_no}&industry=Real+Estate"
   search_via_url: true
 
   search_method: name_or_license_number

@@ -523,19 +523,39 @@ def _dre_lookup_impl(
             else:
                 steps.append({"step": "submit", "ok": True, "selector": clicked})
 
-        # 3) Wait for results, then STAY CALMLY so the names render before
-        #    we screenshot or navigate away (user feedback: "just after the
-        #    result came, it suddenly closed").
+        # 3) Wait for results. Two possible outcomes for SPA sites:
+        #    a) Results list renders with a[href*='detail_id'] links → click one
+        #    b) Site auto-navigates to detail page (URL now has ?detail_id=N) →
+        #       skip the click step, we're already on the detail page
         row_sel_list = _as_list(selectors.get("result_rows", "table tbody tr"))
         row_sel_primary = row_sel_list[0] if row_sel_list else "table tbody tr"
         no_results_sel = selectors.get("no_results_marker")
+        already_on_detail = False
         try:
-            # state="visible" — wait until at least one row is actually shown
-            page.wait_for_selector(row_sel_primary, timeout=15000, state="visible")
-            # Brief settle for SF Lightning / React to finish rendering names
-            page.wait_for_timeout(1500)
-            steps.append({"step": "wait_for_results", "ok": True})
-            # Screenshot #2 of 3: results page with the person name(s) visible
+            # Wait for EITHER results list OR the page to land on a detail URL.
+            page.wait_for_function(
+                """(rowSel) => {
+                    if (window.location.search.includes('detail_id=')) return true;
+                    const rows = document.querySelectorAll(rowSel);
+                    if (rows.length > 0) {
+                        for (const r of rows) {
+                            const cs = window.getComputedStyle(r);
+                            if (cs.display !== 'none' && cs.visibility !== 'hidden') return true;
+                        }
+                    }
+                    return false;
+                }""",
+                arg=row_sel_primary,
+                timeout=15000,
+            )
+            # Generous settle so SPA re-renders / hydration finish before we read.
+            page.wait_for_timeout(2500)
+            already_on_detail = "detail_id=" in (page.url or "")
+            steps.append({
+                "step": "wait_for_results", "ok": True,
+                "already_on_detail": already_on_detail, "url": page.url,
+            })
+            # Screenshot #2 of 3: results (or detail if we auto-redirected)
             result["screenshots"].append(_shot(page, "dre-02-results"))
         except Exception:
             # No structured rows — maybe a no_results banner or CAPTCHA
@@ -622,9 +642,48 @@ def _dre_lookup_impl(
                     _as_list(selectors.get("detail_link_in_row", "a[href*='detail']"))[-1]
                 )
 
+        # If the site already auto-navigated us to the detail page (1-result
+        # short-circuit common on SPA license-lookup sites), skip the click
+        # step entirely and go straight to expiration extraction.
+        if flow == "multi_page_detail" and already_on_detail:
+            page.wait_for_timeout(1200)
+            result["screenshots"].append(_shot(page, "dre-03-detail"))
+            result["html"] = page.content()
+            steps.append({"step": "click_detail", "ok": True,
+                          "strategy": "auto_redirected_to_detail",
+                          "url": page.url})
+            # Reuse the same extraction logic by faking the picked row
+            result["picked_index"] = 0
+            result["picked_row"] = {"name": expected_name,
+                                    "license_type": expected_license_type,
+                                    "status": "Active"}
+            exp_text = None
+            body_text = ""
+            try:
+                body_text = page.inner_text("body")
+            except Exception:
+                body_text = result["html"] or ""
+            m = re.search(
+                r"Expiration Date[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
+                body_text,
+            )
+            if m:
+                exp_text = m.group(1)
+            if exp_text:
+                result["expiration_raw"] = exp_text.strip()
+                result["expiration"] = _normalize_date(exp_text) or exp_text.strip()
+                result["found"] = True
+                result["name"] = expected_name
+            steps.append({"step": "extract_expiration", "ok": bool(result["expiration"]),
+                          "raw": exp_text, "normalized": result["expiration"]})
+            try:
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
+
         # 5) Multi-page flow: pick best row (name + license_type + status),
         #    then click through to detail page, then extract expiration.
-        if flow == "multi_page_detail" and rows:
+        elif flow == "multi_page_detail" and rows:
             target_idx = _pick_row_index(
                 result["candidates"], expected_name=expected_name,
                 expected_license_type=expected_license_type,
