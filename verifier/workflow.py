@@ -195,6 +195,7 @@ def run_verification(
         # profile fetch — open → fill → submit → wait → parse → click → extract.
         STEP_LABELS = {
             "open":              ("🌐", "Opened live DRE page"),
+            "url_search":        ("🔗", "Search via URL params (no form fill needed)"),
             "form_scope":        ("🎯", "Scoped to license-search form"),
             "recaptcha_detected":("⚠",  "reCAPTCHA widget detected on page"),
             "fill_license":      ("⌨",  "Typed license number into form"),

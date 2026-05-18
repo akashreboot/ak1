@@ -250,6 +250,17 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
 
     flow = adapter["dre"].get("flow")  # e.g. "multi_page_detail" for WA
 
+    # Some adapters (e.g. TX TREC) prefer URL-param-based search over form
+    # submission — their form is just a UI wrapper around URL query params,
+    # and their search UI is a JS SPA that reads the params directly.
+    template = adapter["dre"].get("search_url_template")
+    search_via_url = bool(adapter["dre"].get("search_via_url") and template)
+    if search_via_url:
+        try:
+            base_url = template.format(license_no=license_no)
+        except Exception:
+            base_url = template.replace("{license_no}", str(license_no))
+
     # Pass the CRM's expected name + license type so the runner can pick the
     # correct row when the DRE returns multiple matches (per user spec:
     # 1 result → click it, >1 → match by name + license_type, then click).
@@ -260,6 +271,7 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
         license_no=license_no, base_url=base_url, selectors=selectors,
         headed=headed, slow_mo_ms=80, flow=flow, state_code=state,
         expected_name=expected_name, expected_license_type=expected_license_type,
+        search_via_url=search_via_url,
     )
 
     if effective_tier == "T1" or runner_name in ("playwright", "browserbase-simulated", "playwright-fallback"):

@@ -194,6 +194,7 @@ def dre_lookup(
     state_code: Optional[str] = None,
     expected_name: Optional[str] = None,
     expected_license_type: Optional[str] = None,
+    search_via_url: bool = False,
 ) -> dict:
     """Drive a state DRE — fill license #, capture screenshots, extract expiration.
 
@@ -218,6 +219,7 @@ def dre_lookup(
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
         "expected_name": expected_name, "expected_license_type": expected_license_type,
+        "search_via_url": search_via_url,
     }, timeout=60)
 
     if result.get("ok") is False:
@@ -438,6 +440,7 @@ def _dre_lookup_impl(
     license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
     flow: Optional[str] = None, state_code: Optional[str] = None,
     expected_name: Optional[str] = None, expected_license_type: Optional[str] = None,
+    search_via_url: bool = False,
 ) -> dict:
     flow = flow or "single_page"
     result: dict = {
@@ -464,54 +467,61 @@ def _dre_lookup_impl(
             result["recaptcha_detected"] = True
             steps.append({"step": "recaptcha_detected", "note": "reCAPTCHA widget present on page"})
 
-        # ── Scope to the correct <form> when the page has several ──────
-        # Pages like TREC have Site Search + License Holder Search + Topic
-        # Search on one page. We MUST type into the License Holder Search.
-        label_hint = selectors.get("license_input_label")
-        form_scope = None
-        if label_hint:
-            form_scope = _find_form_with_label(page, label_hint)
-            if form_scope:
-                steps.append({"step": "form_scope", "ok": True, "label": label_hint})
+        # ── search_via_url: skip the entire form-fill+submit dance ────
+        # Some sites' search forms are method=GET wrappers around URL params
+        # (e.g. TREC). We navigate directly to the pre-filled URL and let the
+        # server / SPA render the results — no fragile form interaction.
+        if search_via_url:
+            # URL-param search (TREC pattern): license # is already in base_url.
+            steps.append({"step": "url_search", "ok": True,
+                          "url": base_url, "license_no": license_no})
+        else:
+            # ── Scope to the correct <form> when the page has several ──
+            label_hint = selectors.get("license_input_label")
+            form_scope = None
+            if label_hint:
+                form_scope = _find_form_with_label(page, label_hint)
+                if form_scope:
+                    steps.append({"step": "form_scope", "ok": True, "label": label_hint})
 
-        # 1) Fill license number (visible in subsequent screenshot)
-        used_sel = _try_fill(
-            page, selectors.get("license_input"), license_no,
-            label_hint=label_hint,
-            placeholder_hint=selectors.get("license_input_placeholder"),
-            scope=form_scope,
-        )
-        # If form-scoped fill failed, try page-wide as a last resort
-        if not used_sel and form_scope is not None:
+            # 1) Fill license number
             used_sel = _try_fill(
                 page, selectors.get("license_input"), license_no,
                 label_hint=label_hint,
                 placeholder_hint=selectors.get("license_input_placeholder"),
+                scope=form_scope,
             )
-        if not used_sel:
-            steps.append({"step": "fill_license", "ok": False, "error": "no selector matched"})
-            result["error"] = "could_not_locate_license_input"
-            return result
-        steps.append({"step": "fill_license", "ok": True, "value": license_no, "selector": used_sel})
+            # If form-scoped fill failed, try page-wide as a last resort
+            if not used_sel and form_scope is not None:
+                used_sel = _try_fill(
+                    page, selectors.get("license_input"), license_no,
+                    label_hint=label_hint,
+                    placeholder_hint=selectors.get("license_input_placeholder"),
+                )
+            if not used_sel:
+                steps.append({"step": "fill_license", "ok": False, "error": "no selector matched"})
+                result["error"] = "could_not_locate_license_input"
+                return result
+            steps.append({"step": "fill_license", "ok": True, "value": license_no, "selector": used_sel})
 
-        # 2) Submit (scoped to the same form so we don't trigger Site Search)
-        clicked = _try_click(
-            page, selectors.get("submit_button"),
-            role_hint="button",
-            text_hint=selectors.get("submit_button_text", "Search"),
-            scope=form_scope,
-        )
-        if not clicked and form_scope is not None:
+            # 2) Submit (scoped to the same form so we don't trigger Site Search)
             clicked = _try_click(
                 page, selectors.get("submit_button"),
                 role_hint="button",
                 text_hint=selectors.get("submit_button_text", "Search"),
+                scope=form_scope,
             )
-        if not clicked:
-            page.keyboard.press("Enter")
-            steps.append({"step": "submit", "ok": True, "via": "Enter key"})
-        else:
-            steps.append({"step": "submit", "ok": True, "selector": clicked})
+            if not clicked and form_scope is not None:
+                clicked = _try_click(
+                    page, selectors.get("submit_button"),
+                    role_hint="button",
+                    text_hint=selectors.get("submit_button_text", "Search"),
+                )
+            if not clicked:
+                page.keyboard.press("Enter")
+                steps.append({"step": "submit", "ok": True, "via": "Enter key"})
+            else:
+                steps.append({"step": "submit", "ok": True, "selector": clicked})
 
         # 3) Wait for results, then STAY CALMLY so the names render before
         #    we screenshot or navigate away (user feedback: "just after the
