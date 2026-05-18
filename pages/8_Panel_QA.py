@@ -1,11 +1,11 @@
 import streamlit as st
 from components.styles import page_setup, hero, card, divider, footer, REAL_CYAN, REAL_INDIGO, REAL_MUTED
 
-page_setup("Panel Q&A", icon="🎯")
+page_setup("Q&A", icon="🎯")
 
 hero(
-    eyebrow="08 · Anticipated Panel Q&A",
-    title_html='20 questions Mark <span class="gradient-text">might ask me</span>, and how I\'d answer.',
+    eyebrow="08 · Q&A",
+    title_html='20 anticipated questions <span class="gradient-text">and how we answer them</span>, and how I\'d answer.',
     subtitle=(
         "Grouped by likely line of questioning. Each answer is short — the kind I can actually deliver "
         "out loud in 60–90 seconds. The 'one-liner' is the soundbite if I have only 10."

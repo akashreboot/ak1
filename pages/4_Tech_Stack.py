@@ -9,7 +9,7 @@ hero(
     eyebrow="04 · Tech Stack & Why",
     title_html='Every choice. <span class="gradient-text">Every alternative.</span> Every reason I picked one.',
     subtitle=(
-        "Mark, this is the part of the deck I'd most want to debate with you. Each row below is a decision "
+        "This is the part of the deck I'd most want to debate with you. Each row below is a decision "
         "I'd make on day one, with the alternatives I rejected and the reasons why."
     ),
 )

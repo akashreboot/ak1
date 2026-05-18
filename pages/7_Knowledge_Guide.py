@@ -7,7 +7,7 @@ hero(
     eyebrow="07 · Knowledge Guide",
     title_html='<span class="gradient-text">Every tool</span>, in plain English. Plus the <span class="glow-text">alternatives</span> I considered.',
     subtitle=(
-        "Think of this as the appendix Mark would actually want — what each piece of the stack does, why we use "
+        "Think of this as the appendix an engineer would actually want — what each piece of the stack does, why we use "
         "it, when you'd swap it out, and where to read more."
     ),
 )
@@ -213,6 +213,6 @@ c1, c2 = st.columns([1, 1])
 with c1:
     st.page_link("pages/6_Deployment.py", label="← Deployment", width="stretch")
 with c2:
-    st.page_link("pages/8_Panel_QA.py", label="Next: Panel Q&A →", width="stretch")
+    st.page_link("pages/8_Panel_QA.py", label="Next: Q&A →", width="stretch")
 
 footer()

@@ -1,7 +1,7 @@
 """Newly Joined — the 20-agent trigger feed.
 
 In production, EventBridge would deliver each `agent.activated` event one at a
-time. Here we let the panel see the queue and "Run all" or run one at a time.
+time. Here we surface the queue and "Run all" or run one at a time.
 """
 from __future__ import annotations
 

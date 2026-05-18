@@ -1,21 +1,22 @@
 # Agent Verification System · Case Study
 
-> A durable, AI-augmented browser-automation system that cross-verifies every Real agent
-> against `onereal.com` and their state Department of Real Estate. Built in 2026 for
-> all 50 U.S. states.
+> A durable, AI-augmented browser-automation system that cross-verifies every
+> agent against their published profile and their state Department of Real
+> Estate. Designed for all 50 U.S. states.
 
 ---
 
 ## TL;DR
 
-Real onboards hundreds of new agents per week across all 50 states. Today, license
-verification is partially manual — every state's DRE has its own form, layout, and
-anti-bot posture, and the work scales linearly with hiring. We designed and prototyped
-a system that does the full verification in **under 90 seconds per agent**, **with
-graceful degradation** when state DRE sites change, with **clear human-in-the-loop
-escalation** for the cases that genuinely need a person. The prototype actually drives
-real `onereal.com` profiles and real state DRE sites end-to-end and writes a SQLite
-ledger row for every run — no hardcoded "success" placeholders.
+A real-estate brokerage onboards hundreds of new agents per week across all 50
+states. Today, license verification is partially manual — every state's DRE
+has its own form, layout, and anti-bot posture, and the work scales linearly
+with hiring. We designed and prototyped a system that does the full
+verification in **under 90 seconds per agent**, **with graceful degradation**
+when state DRE sites change, with **clear human-in-the-loop escalation** for
+the cases that genuinely need a person. The prototype actually drives real
+`onereal.com` profiles and real state DRE sites end-to-end and writes a
+SQLite ledger row for every run — no hardcoded "success" placeholders.
 
 ---
 
@@ -114,7 +115,7 @@ with Lambdas).
 
 ## What's actually running in the prototype (no hand-waving)
 
-A panel watching this demo can verify, in real time:
+Anyone watching this demo can verify, in real time:
 
 * Real Playwright Chromium opening `https://onereal.com/profile/james-nam`, parsing
   the profile.

@@ -1,8 +1,6 @@
-# Real · Agent Verification System — Presentation + Working Build (v2)
+# Agent Verification System
 
-An interactive Streamlit deck **and** a working implementation. The deck (9 pages) proposes the architecture; the working build (5 more pages) lets you watch it run end-to-end against **real `onereal.com` profiles and real state DRE sites**.
-
-Built for the panel with **Mark Hinojosa** (Manager, Engineering — AI & Automation @ Real).
+An interactive Streamlit deck plus a working implementation. The deck (9 pages) describes the architecture; the working build (6 pages) lets you watch it run end-to-end against real `onereal.com` profiles and real state DRE sites.
 
 ## Quick start (Windows / PowerShell)
 

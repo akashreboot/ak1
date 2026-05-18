@@ -8,7 +8,7 @@ hero(
     eyebrow="05 · Resilience & Failure Handling",
     title_html='What happens when the <span class="gradient-text">internet changes underneath us?</span>',
     subtitle=(
-        "Mark's three design questions get answered here: how we mitigate UI changes, how we surface failures "
+        "Three design questions get answered here: how we mitigate UI changes, how we surface failures "
         "for human review, and how we make sure the workflow always runs (deployment is on the next page)."
     ),
 )
@@ -51,7 +51,7 @@ with side:
 
 divider()
 
-st.markdown("### Mark's three questions — answered")
+st.markdown("### Three design questions — answered")
 
 q1, q2, q3 = st.tabs([
     "1 · How do we mitigate failures from UI changes on JoinReal / DRE?",

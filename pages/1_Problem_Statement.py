@@ -124,7 +124,7 @@ with a2:
     )
 with a3:
     card(
-        "Questions I'd ask Mark on day 1",
+        "Questions I'd ask on day 1",
         """
         <ol style="margin:0; padding-left:18px;">
             <li>Does the CRM support outbound webhooks today, or do we need an outbox poller?</li>

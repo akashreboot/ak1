@@ -1,7 +1,7 @@
 """Metrics Dashboard — Datadog stand-in.
 
 Real numbers from the real ledger. In production these same queries hit
-Postgres and the panel renders in Datadog; locally it's just SQLite.
+Postgres and Datadog renders the panel; locally it's just SQLite.
 """
 from __future__ import annotations
 

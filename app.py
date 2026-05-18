@@ -33,9 +33,9 @@ with st.sidebar:
     st.markdown(
         f"""
         <div style="margin-top:24px; padding-top:18px; border-top:1px solid rgba(255,255,255,0.06);">
-            <div style="color:{REAL_MUTED}; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.15em;">Audience</div>
-            <div style="margin-top:6px; font-weight:600;">Mark Hinojosa</div>
-            <div style="color:{REAL_MUTED}; font-size:0.82rem;">Mgr, Engineering — AI & Automation @ Real</div>
+            <div style="color:{REAL_MUTED}; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.15em;">Project</div>
+            <div style="margin-top:6px; font-weight:600;">Agent Verification System</div>
+            <div style="color:{REAL_MUTED}; font-size:0.82rem;">v2 · prototype</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -43,13 +43,11 @@ with st.sidebar:
 
 # Hero
 hero(
-    eyebrow="Automation Business Case · Real",
-    title_html='An <span class="gradient-text">autonomous, self-healing</span><br/>Agent Verification System for all <span class="glow-text">50 U.S. states</span>',
+    eyebrow="Agent Verification System",
+    title_html='Autonomous license verification for <span class="gradient-text">all 50 U.S. states</span>',
     subtitle=(
-        "Every week, hundreds of new Real agents activate in the CRM. Each one must be cross-verified against "
-        "JoinReal.com and their state's Department of Real Estate. This deck proposes a durable, "
-        "AI-augmented browser automation system that does it in &lt; 90 seconds per agent — with graceful "
-        "degradation when the web changes underneath us."
+        "Cross-checks every newly activated agent against onereal.com and the state DRE. "
+        "Durable workflow, adapter-per-state, AI as fallback only."
     ),
 )
 

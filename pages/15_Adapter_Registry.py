@@ -114,7 +114,7 @@ card(
         <li>Each state starts at its declared tier (T1 by default).</li>
         <li>After <b>3 consecutive failures</b>, the router promotes that state to the next tier (T1 → T2 → T3 → T4).</li>
         <li>After <b>3 consecutive successes</b> at a promoted tier, the router demotes back to the declared tier (gives the cheap path another chance after the site stabilizes).</li>
-        <li>The Live Demo trace shows which tier was used for each verification, so the panel can see the routing live.</li>
+        <li>The Live Demo trace shows which tier was used for each verification, so the trace shows the routing live.</li>
     </ul>
     """,
     pills=[("Self-healing", "cyan")],

@@ -7,7 +7,7 @@ hero(
     eyebrow="09 · Talk Track",
     title_html='The <span class="gradient-text">10-minute</span> presentation, beat by beat.',
     subtitle=(
-        "Below is the minute-by-minute script for the panel. Practice it out loud twice — don't memorize "
+        "Below is the minute-by-minute talk track. Practice it out loud twice — don't memorize "
         "it word-for-word. The bold lines are the ones to say verbatim; the rest is connective tissue."
     ),
 )
@@ -51,7 +51,7 @@ with p3:
         <ul style="margin:0; padding-left:18px;">
             <li>The HITL Slack alert mock (page 5)</li>
             <li>The cost-per-verification metric (page 4)</li>
-            <li>The 2-week MVP plan (panel Q16)</li>
+            <li>The 2-week MVP plan (Q16)</li>
             <li>Adapter-as-data rollback story (page 6)</li>
         </ul>
         """,
@@ -67,7 +67,7 @@ beats = [
     ("0:00 – 0:45",
      "Open with the why",
      [
-         ("VERBATIM", "\"Mark, thanks for the time. Before I jump in — what I built is a working presentation, not a slide deck. We'll click through it together.\""),
+         ("VERBATIM", "\"Thanks for the time. Before I jump in — what I built is a working presentation, not a slide deck. We'll click through it together.\""),
          ("BEAT", "Pause for ~2 seconds. Smile."),
          ("VERBATIM", "\"The brief was: verify every newly-activated Real agent against JoinReal and their state's DRE — autonomously, across 50 states, resilient to UI changes. So I designed for two principles: it has to be cheap when nothing's wrong, and graceful when something is.\""),
      ]),
@@ -110,7 +110,7 @@ beats = [
           "Stagehand sits in the middle — Playwright underneath, AI on top, with a cache that learns. That's the right shape for production verification."),
      ]),
     ("6:30 – 8:00",
-     "Mark's three questions",
+     "Three design questions",
      [
          ("ACTION", "Page 5 (Resilience)."),
          ("VERBATIM", "\"Your three design questions get explicit answers here.\""),
@@ -234,7 +234,7 @@ st.markdown(
 st.write("")
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/8_Panel_QA.py", label="← Panel Q&A", width="stretch")
+    st.page_link("pages/8_Panel_QA.py", label="← Q&A", width="stretch")
 with c2:
     st.page_link("app.py", label="Back to Home →", width="stretch")
 
