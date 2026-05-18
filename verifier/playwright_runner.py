@@ -178,20 +178,40 @@ def dre_lookup(
 ) -> dict:
     """Drive a state DRE — fill license #, capture screenshots, extract expiration.
 
+    REAL extraction, no silent hardcoded fallback. If Playwright isn't
+    installed at all we use _offline_dre (a clearly-labeled stand-in);
+    otherwise every call is a genuine live browser run. If the subprocess
+    fails (e.g. reCAPTCHA blocks for >2 min, network down, selector drift)
+    the real error is propagated so the workflow can route to HITL —
+    we do NOT fabricate results.
+
     Supports a `flow` argument:
       - None / "single_page" — extract expiration directly from results page
       - "multi_page_detail"  — click the matching result row → detail page →
                                extract expiration from the detail page
     """
     if not playwright_available():
+        # Playwright not installed at all — only here do we synthesize.
         return _offline_dre(license_no, base_url, state_code=state_code)
+
+    # Allow up to 3 minutes per call so a human can solve a reCAPTCHA in
+    # the visible browser window if one appears.
     result = _run_in_subprocess("dre_lookup", {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
-    })
+    }, timeout=200)
+
     if result.get("ok") is False:
-        print(f"[playwright_runner] dre_lookup fell back to offline: {result.get('error')}")
-        return _offline_dre(license_no, base_url, state_code=state_code)
+        # DO NOT silently substitute hardcoded results. Surface the real
+        # failure so the workflow's HitlPause path runs and the panel
+        # sees what actually happened.
+        return {
+            "license_no": license_no, "found": False, "name": None,
+            "expiration": None, "captcha": "captcha" in (result.get("error") or "").lower(),
+            "html": None, "screenshots": [], "candidates": [],
+            "error": result.get("error"),
+            "_subprocess_failed": True, "runner": "playwright",
+        }
     return result
 
 
@@ -304,28 +324,45 @@ def _dre_lookup_impl(
         else:
             steps.append({"step": "submit", "ok": True, "selector": clicked})
 
+        # 3) ⏳ LONG WAIT for results to appear. If reCAPTCHA blocks the
+        #    submission, the page won't navigate until a human checks
+        #    "I'm not a robot" in the visible browser window. We give them
+        #    up to 2 minutes; once results appear the automation resumes.
+        row_sel_list = _as_list(selectors.get("result_rows", "table tbody tr"))
+        row_sel_primary = row_sel_list[0] if row_sel_list else "table tbody tr"
+        no_results_sel = selectors.get("no_results_marker")
+        results_appeared = False
         try:
-            page.wait_for_load_state("networkidle", timeout=12000)
+            page.wait_for_selector(row_sel_primary, timeout=120000, state="attached")
+            results_appeared = True
+            steps.append({"step": "wait_for_results", "ok": True,
+                          "note": "results table appeared (CAPTCHA solved if it was present)"})
         except Exception:
-            pass
-
-        # 3) Check for a CAPTCHA challenge after submit (Cloudflare / reCAPTCHA gate)
-        body = (page.content() or "").lower()
-        if "checking your browser" in body or "verify you are human" in body or (
-            "recaptcha" in body and "challenge" in body
-        ):
-            result["captcha"] = True
-            result["html"] = page.content()
-            result["screenshots"].append(_shot(page, "dre-03-captcha-wall"))
-            steps.append({"step": "captcha_wall", "ok": False, "reason": "post-submit challenge"})
-            return result
+            # See if a "no results" message appeared instead
+            no_res_el, _ = _try_query(page, no_results_sel) if no_results_sel else (None, None)
+            if no_res_el:
+                steps.append({"step": "wait_for_results", "ok": True, "note": "no_results message"})
+            else:
+                # Real failure — likely CAPTCHA not solved, or the site changed
+                body_low = (page.content() or "").lower()
+                if any(m in body_low for m in ("recaptcha", "verify you are human", "checking your browser")):
+                    result["captcha"] = True
+                    result["html"] = page.content()
+                    result["screenshots"].append(_shot(page, "dre-03-captcha-wall"))
+                    steps.append({"step": "captcha_wall", "ok": False,
+                                  "reason": "results never appeared — CAPTCHA likely unsolved"})
+                    return result
+                steps.append({"step": "wait_for_results", "ok": False,
+                              "error": "timeout after 120s — no results, no captcha marker"})
+                result["screenshots"].append(_shot(page, "dre-03-timeout"))
+                result["error"] = "timeout_waiting_for_results_120s"
+                return result
 
         result["screenshots"].append(_shot(page, "dre-03-results"))
 
         # 4) Parse result rows into candidates
-        row_sel = _as_list(selectors.get("result_rows", "table tbody tr"))
         rows = []
-        for s in row_sel:
+        for s in row_sel_list:
             try:
                 rows = page.query_selector_all(s)
                 if rows:

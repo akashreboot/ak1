@@ -190,6 +190,34 @@ def run_verification(
             activities.dre_verify, headed=headed_browser,
         )
 
+        # Emit one span for each browser-driving step the runner performed.
+        # This makes the live DRE flow visible in the trace exactly like the
+        # profile fetch — open → fill → submit → wait → parse → click → extract.
+        STEP_LABELS = {
+            "open":              ("🌐", "Opened live DRE page"),
+            "recaptcha_detected":("⚠",  "reCAPTCHA widget detected on page"),
+            "fill_license":      ("⌨",  "Typed license number into form"),
+            "submit":            ("🖱",  "Clicked Search"),
+            "wait_for_results":  ("⏳",  "Waited for results to appear (up to 2 min for human to solve CAPTCHA)"),
+            "captcha_wall":      ("🛑", "Blocked by CAPTCHA wall"),
+            "parse_results":     ("📑", "Parsed candidate rows"),
+            "click_detail":      ("👉", "Clicked through to license detail page"),
+            "extract_expiration":("📅", "Extracted expiration date from detail page"),
+        }
+        for st in (ctx.dre.get("steps") or []):
+            icon, label = STEP_LABELS.get(st.get("step", ""), ("·", st.get("step", "step")))
+            ok = st.get("ok", True)
+            detail_parts = []
+            for k, v in st.items():
+                if k in ("step", "ok"):
+                    continue
+                detail_parts.append(f"{k}={v}")
+            yield ctx.span(
+                "ok" if ok else "warn", "DRE/browser",
+                f"{icon} {label}",
+                detail=" · ".join(detail_parts)[:240] or None,
+            )
+
         # Narrate the multi-page flow so the panel sees the disambiguation story
         cand_list = ctx.dre.get("candidates") or []
         if cand_list:

@@ -240,6 +240,13 @@ if run_clicked:
     if reset:
         db.reset_demo()
         st.toast("Ledger reset.", icon="🧹")
+    if not practice and playwright_available():
+        st.info(
+            "🌐  **Live mode.** A real browser window will open and drive the actual DRE site. "
+            "If a **reCAPTCHA** appears (most likely on WA DOL), solve it in the browser window — "
+            "the automation will wait up to 2 minutes for results and pick up automatically once "
+            "the page loads."
+        )
     if not playwright_available() and not practice:
         st.warning(
             "Playwright isn't installed. The workflow will fall back to the cached profile and "

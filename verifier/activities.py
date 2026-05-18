@@ -228,8 +228,16 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
     if result.get("runner"):
         ctx.runner_used = result["runner"]
 
+    # If the live browser run failed for any reason, route honestly to HITL
+    # rather than silently fabricating a result. The scraped detail tells the
+    # operator what actually happened (selector drift, captcha not solved, etc.)
     if result.get("captcha"):
-        raise HitlPause(reason="captcha_or_cloudflare_wall", scraped=result)
+        raise HitlPause(reason="captcha_or_cloudflare_wall_unsolved", scraped=result)
+    if result.get("_subprocess_failed") or result.get("error"):
+        raise HitlPause(
+            reason=f"live_dre_run_failed: {result.get('error') or 'unknown'}",
+            scraped=result,
+        )
 
     # Disambiguate if we got multiple candidates
     candidates = result.get("candidates") or ([{"name": result.get("name"),
