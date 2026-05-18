@@ -17,55 +17,131 @@ st.write("")
 
 # Topology
 st.markdown("### Deployment topology")
-c1, c2 = st.columns([1.3, 1])
-with c1:
-    st.markdown(
-        f"""
-        <div class="card">
-            <pre style="background:transparent; border:none; color:#CBD5E1; font-size:0.86rem; line-height:1.5;">
-┌──────────────────── AWS · us-east-1  (primary) ────────────────────┐
-│                                                                    │
-│  ┌─ API Gateway ─┐    ┌─ EventBridge ─┐    ┌─ DynamoDB outbox ─┐   │
-│  │  /webhook/crm │ ──▶│ event bus     │ ──▶│ + poller backstop │   │
-│  └───────────────┘    └───────────────┘    └───────────────────┘   │
-│                                │                                   │
-│                                ▼                                   │
-│                       Temporal Cloud (multi-region)                │
-│                                │                                   │
-│        ┌───────────────────────┼────────────────────────┐          │
-│        ▼                       ▼                        ▼          │
-│  ┌──────────────┐      ┌──────────────┐         ┌──────────────┐   │
-│  │ EKS · AZ-a   │      │ EKS · AZ-b   │         │ EKS · AZ-c   │   │
-│  │  workers     │      │  workers     │         │  workers     │   │
-│  └──────────────┘      └──────────────┘         └──────────────┘   │
-│        │                                                           │
-│        ▼  (Browserbase API)                                        │
-│  Managed browser cloud · residential proxies · CAPTCHA solver      │
-│        │                                                           │
-│        ▼                                                           │
-│  RDS Postgres (Multi-AZ) · S3 (CRR to us-west-2) · Redis           │
-│                                                                    │
-└────────────────────────────────────────────────────────────────────┘
-                                │
-                  (passive)     ▼
-        ┌──── AWS · us-west-2 (warm standby) ────┐
-        │   EKS workers · RDS read replica · ... │
-        └────────────────────────────────────────┘
-            </pre>
-        </div>
-        """,
-        unsafe_allow_html=True,
+
+# ── Layered topology diagram (styled HTML grid, not ASCII art) ───────────
+_TIER_CARD = (
+    "background:{bg}; border:1px solid {border}; border-radius:10px; "
+    "padding:10px 14px; text-align:center;"
+)
+_TIER_LABEL = (
+    "color:{c}; font-size:0.68rem; text-transform:uppercase; "
+    "letter-spacing:0.14em; font-weight:700; margin-bottom:4px;"
+)
+_TIER_VALUE = "color:#E2E8F0; font-size:0.92rem; font-weight:600;"
+_TIER_SUB = "color:#94A3B8; font-size:0.74rem; margin-top:2px;"
+
+
+def _svc(label, value, sub=None, tone="cyan"):
+    tones = {
+        "cyan":   ("rgba(6,182,212,0.10)",   "rgba(6,182,212,0.45)",   "#22D3EE"),
+        "violet": ("rgba(139,92,246,0.10)",  "rgba(139,92,246,0.45)",  "#A78BFA"),
+        "mint":   ("rgba(16,185,129,0.10)",  "rgba(16,185,129,0.45)",  "#34D399"),
+        "amber":  ("rgba(245,158,11,0.10)",  "rgba(245,158,11,0.45)",  "#FBBF24"),
+        "muted":  ("rgba(100,116,139,0.10)", "rgba(100,116,139,0.40)", "#94A3B8"),
+    }
+    bg, border, lc = tones[tone]
+    sub_html = f'<div style="{_TIER_SUB}">{sub}</div>' if sub else ""
+    return (
+        f'<div style="{_TIER_CARD.format(bg=bg, border=border)}">'
+        f'<div style="{_TIER_LABEL.format(c=lc)}">{label}</div>'
+        f'<div style="{_TIER_VALUE}">{value}</div>{sub_html}</div>'
     )
+
+
+def _arrow(direction="down"):
+    glyph = {"down": "▼", "right": "▶"}[direction]
+    return (
+        f'<div style="text-align:center; color:#64748B; font-size:0.7rem; '
+        f'padding:6px 0;">{glyph}</div>'
+    )
+
+
+def _region_wrap(title, inner, accent="cyan", passive=False):
+    accents = {"cyan": "#06B6D4", "muted": "#64748B"}
+    c = accents[accent]
+    op = "0.55" if passive else "1.0"
+    suffix = " · passive" if passive else ""
+    return (
+        f'<div style="border:1px dashed {c}; border-radius:14px; padding:14px 16px; '
+        f'margin:8px 0; opacity:{op};">'
+        f'<div style="color:{c}; font-size:0.72rem; text-transform:uppercase; '
+        f'letter-spacing:0.16em; font-weight:700; margin-bottom:10px;">'
+        f'{title}{suffix}</div>{inner}</div>'
+    )
+
+
+c1, c2 = st.columns([1.5, 1])
+with c1:
+    # Row 1 — ingress
+    row1 = (
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">'
+        + _svc("Ingress",  "API Gateway",        "POST /webhook/crm",          "cyan")
+        + _svc("Bus",      "EventBridge",        "agent.activated",            "cyan")
+        + _svc("Outbox",   "DynamoDB",           "poller backstop",            "cyan")
+        + "</div>"
+    )
+    # Row 2 — orchestrator
+    row2 = (
+        '<div style="display:grid; grid-template-columns:1fr; gap:10px;">'
+        + _svc("Orchestrator", "Temporal Cloud", "multi-region · signal-resumable", "violet")
+        + "</div>"
+    )
+    # Row 3 — workers (multi-AZ)
+    row3 = (
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">'
+        + _svc("Compute · AZ-a", "EKS workers", "Playwright + Camoufox", "violet")
+        + _svc("Compute · AZ-b", "EKS workers", "Playwright + Camoufox", "violet")
+        + _svc("Compute · AZ-c", "EKS workers", "Playwright + Camoufox", "violet")
+        + "</div>"
+    )
+    # Row 4 — external
+    row4 = (
+        '<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">'
+        + _svc("T3 runner", "Browserbase API", "residential proxies · CAPTCHA solver", "amber")
+        + _svc("LLM",        "Anthropic API",   "Haiku classify · Opus vision fallback", "amber")
+        + "</div>"
+    )
+    # Row 5 — storage
+    row5 = (
+        '<div style="display:grid; grid-template-columns:1.2fr 1fr 0.9fr; gap:10px;">'
+        + _svc("Ledger",   "RDS Postgres", "Multi-AZ", "mint")
+        + _svc("Artifacts","S3",           "CRR → us-west-2", "mint")
+        + _svc("Cache",    "Redis",        "selector cache · session", "mint")
+        + "</div>"
+    )
+
+    primary = _region_wrap(
+        "AWS · us-east-1  (primary)",
+        row1 + _arrow() + row2 + _arrow() + row3 + _arrow() + row4 + _arrow() + row5,
+        accent="cyan",
+    )
+
+    # Passive standby
+    standby_inner = (
+        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">'
+        + _svc("Compute", "EKS workers",      "warm",                "muted")
+        + _svc("Ledger",  "RDS read replica", "promotable",          "muted")
+        + _svc("Cutover", "Route 53",         "DNS failover · ≤ 30s", "muted")
+        + "</div>"
+    )
+    standby = _region_wrap(
+        "AWS · us-west-2  (warm standby)", standby_inner,
+        accent="muted", passive=True,
+    )
+
+    st.markdown(primary + _arrow() + standby, unsafe_allow_html=True)
+
 with c2:
     card("Why this shape",
-         "Stateless workers, durable workflow state in Temporal, durable event state in EventBridge + DynamoDB. "
-         "We can lose every pod and not lose work. The warm standby in us-west-2 gives us a one-button DNS cutover "
-         "if the primary region degrades.",
+         "Stateless workers, durable workflow state in Temporal, durable event state in "
+         "EventBridge + DynamoDB outbox. We can lose every pod and not lose work. The warm "
+         "standby in us-west-2 gives us a one-button DNS cutover if the primary region degrades.",
          pills=[("Multi-AZ", "blue"), ("Warm DR", "violet")])
     card("CI/CD",
-         "<b>GitHub Actions</b> → build → integration tests against a sandbox JoinReal mirror + recorded DRE "
-         "fixtures → push image → <b>ArgoCD</b> rolls out to EKS with automated rollback on health-check failure. "
-         "Adapter changes are config-only and ship through a separate, faster pipeline.",
+         "<b>GitHub Actions</b> → build → integration tests against a sandbox JoinReal mirror "
+         "+ recorded DRE fixtures → push image → <b>ArgoCD</b> rolls out to EKS with automated "
+         "rollback on health-check failure. Adapter changes are config-only and ship through "
+         "a separate, faster pipeline.",
          pills=[("GitOps", "cyan"), ("Canary", "mint")])
 
 divider()
