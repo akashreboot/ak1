@@ -59,6 +59,8 @@ def dre_lookup_stealth(
     slow_mo_ms: int = 250,
     flow=None,
     state_code=None,
+    expected_name=None,
+    expected_license_type=None,
 ) -> dict:
     """Drive a DRE site through Camoufox (Firefox + stealth patches).
 
@@ -71,6 +73,7 @@ def dre_lookup_stealth(
     pw_args = {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
+        "expected_name": expected_name, "expected_license_type": expected_license_type,
     }
 
     # ── Step 1: try Camoufox if available ────────────────────────────
@@ -107,7 +110,7 @@ def dre_lookup_stealth(
 
 def _dre_lookup_camoufox_impl(
     license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
-    flow=None, state_code=None,
+    flow=None, state_code=None, expected_name=None, expected_license_type=None,
 ) -> dict:
     from camoufox.sync_api import Camoufox  # type: ignore
 

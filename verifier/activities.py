@@ -250,22 +250,25 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
 
     flow = adapter["dre"].get("flow")  # e.g. "multi_page_detail" for WA
 
+    # Pass the CRM's expected name + license type so the runner can pick the
+    # correct row when the DRE returns multiple matches (per user spec:
+    # 1 result → click it, >1 → match by name + license_type, then click).
+    expected_name = ctx.crm["name"]["full"]
+    expected_license_type = ctx.crm["license"]["type"]
+
+    runner_kwargs = dict(
+        license_no=license_no, base_url=base_url, selectors=selectors,
+        headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
+        expected_name=expected_name, expected_license_type=expected_license_type,
+    )
+
     if effective_tier == "T1" or runner_name in ("playwright", "browserbase-simulated", "playwright-fallback"):
-        result = runner_mod.dre_lookup(
-            license_no=license_no, base_url=base_url, selectors=selectors,
-            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
-        )
+        result = runner_mod.dre_lookup(**runner_kwargs)
     elif effective_tier == "T2" and runner_name == "camoufox":
         from verifier.runners import camoufox_runner
-        result = camoufox_runner.dre_lookup_stealth(
-            license_no=license_no, base_url=base_url, selectors=selectors,
-            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
-        )
+        result = camoufox_runner.dre_lookup_stealth(**runner_kwargs)
     else:
-        result = runner_mod.dre_lookup(
-            license_no=license_no, base_url=base_url, selectors=selectors,
-            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
-        )
+        result = runner_mod.dre_lookup(**runner_kwargs)
 
     for sc in result.get("screenshots", []):
         ctx.artifacts.append(sc)

@@ -175,6 +175,8 @@ def dre_lookup(
     slow_mo_ms: int = 250,
     flow: Optional[str] = None,
     state_code: Optional[str] = None,
+    expected_name: Optional[str] = None,
+    expected_license_type: Optional[str] = None,
 ) -> dict:
     """Drive a state DRE — fill license #, capture screenshots, extract expiration.
 
@@ -199,6 +201,7 @@ def dre_lookup(
     result = _run_in_subprocess("dre_lookup", {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
+        "expected_name": expected_name, "expected_license_type": expected_license_type,
     }, timeout=200)
 
     if result.get("ok") is False:
@@ -277,9 +280,51 @@ def _normalize_date(text: str) -> Optional[str]:
 
 # ── DRE driver: handles single-page and multi-page flows ─────────────────
 
+def _pick_row_index(
+    candidates: list, expected_name: Optional[str] = None,
+    expected_license_type: Optional[str] = None,
+) -> Optional[int]:
+    """Pick the right row when the DRE returns multiple matches.
+
+    Rules (per user spec):
+      * 1 candidate → pick it
+      * > 1 candidates → score by:
+          - status: Active = +2, Canceled/Expired/Suspended/Revoked = -2
+          - license_type: equal or substring match → +3
+          - name: tokens shared with expected_name → +1.5 per token
+    """
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return 0
+
+    def _score(c: dict) -> float:
+        s = 0.0
+        status = (c.get("status") or "").lower()
+        if "active" in status:
+            s += 2.0
+        elif any(b in status for b in ("cancel", "expired", "suspended", "revoked", "denied")):
+            s -= 2.0
+        if expected_license_type:
+            elt = expected_license_type.lower().strip()
+            clt = (c.get("license_type") or "").lower().strip()
+            if clt and (elt == clt or elt in clt or clt in elt):
+                s += 3.0
+        if expected_name:
+            exp_tokens = {t.lower() for t in re.split(r"[\s,]+", expected_name) if len(t) >= 2}
+            cand_tokens = {t.lower() for t in re.split(r"[\s,]+", (c.get("name") or "")) if len(t) >= 2}
+            s += 1.5 * len(exp_tokens & cand_tokens)
+        return s
+
+    scored = [(i, _score(c)) for i, c in enumerate(candidates)]
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[0][0]
+
+
 def _dre_lookup_impl(
     license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
     flow: Optional[str] = None, state_code: Optional[str] = None,
+    expected_name: Optional[str] = None, expected_license_type: Optional[str] = None,
 ) -> dict:
     flow = flow or "single_page"
     result: dict = {
@@ -383,41 +428,91 @@ def _dre_lookup_impl(
                 result["candidates"].append(cand)
         steps.append({"step": "parse_results", "count": len(result["candidates"])})
 
-        # 5) Multi-page flow: click matching row → detail page → extract expiration
+        # 5) Multi-page flow: pick best row (name + license_type + status),
+        #    then click through to detail page, then extract expiration.
         if flow == "multi_page_detail" and rows:
-            # Pick the row whose status looks Active
-            target_idx = next(
-                (i for i, c in enumerate(result["candidates"])
-                 if "active" in (c.get("status", "").lower())),
-                0,
-            )
-            target_row = rows[target_idx]
-            link_sel_list = _as_list(selectors.get("detail_link_in_row", "td:first-child a"))
-            link = None
-            for sel in link_sel_list:
+            target_idx = _pick_row_index(
+                result["candidates"], expected_name=expected_name,
+                expected_license_type=expected_license_type,
+            ) or 0
+            target_row = rows[target_idx] if target_idx < len(rows) else rows[0]
+            target_cand = result["candidates"][target_idx] if result["candidates"] else {}
+            target_name = (target_cand.get("name") or "").strip()
+            result["picked_index"] = target_idx
+            result["picked_row"] = target_cand
+            steps.append({
+                "step": "pick_row", "ok": True, "picked_index": target_idx,
+                "picked_name": target_name,
+                "picked_license_type": target_cand.get("license_type"),
+                "picked_status": target_cand.get("status"),
+            })
+
+            # ── 3 click strategies, in order of robustness ────────────
+            clicked_detail = False
+            click_strategy = None
+
+            # Strategy 1: declared selectors inside the target row
+            for sel in _as_list(selectors.get("detail_link_in_row", "td:first-child a")):
                 try:
                     link = target_row.query_selector(sel)
                     if link:
+                        link.click(timeout=6000)
+                        clicked_detail = True
+                        click_strategy = f"row_selector:{sel}"
                         break
                 except Exception:
                     continue
-            if link:
+
+            # Strategy 2: find link by visible text matching the row's name
+            if not clicked_detail and target_name:
                 try:
-                    link.click()
-                    page.wait_for_load_state("networkidle", timeout=12000)
+                    # get_by_role("link", name=...) is text-based and resilient
+                    loc = page.get_by_role("link", name=re.compile(re.escape(target_name), re.IGNORECASE))
+                    if loc.count() > 0:
+                        loc.first.click(timeout=8000)
+                        clicked_detail = True
+                        click_strategy = f"role_link_by_name:{target_name}"
+                except Exception:
+                    pass
+
+            # Strategy 3: any link inside the target row
+            if not clicked_detail:
+                try:
+                    any_link = target_row.query_selector("a")
+                    if any_link:
+                        any_link.click(timeout=6000)
+                        clicked_detail = True
+                        click_strategy = "any_link_in_row"
+                except Exception:
+                    pass
+
+            if clicked_detail:
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    pass
+                try:
+                    page.wait_for_load_state("domcontentloaded", timeout=8000)
                 except Exception:
                     pass
                 result["screenshots"].append(_shot(page, "dre-04-detail"))
                 result["html"] = page.content()
-                result["picked_index"] = target_idx
-                result["picked_row"] = result["candidates"][target_idx] if result["candidates"] else None
-                steps.append({"step": "click_detail", "ok": True, "picked_index": target_idx})
+                steps.append({"step": "click_detail", "ok": True,
+                              "picked_index": target_idx, "strategy": click_strategy})
 
-                # Extract expiration via selector then regex fallback
+                # Extract expiration: try selectors then regex on the full page text
                 exp_text = None
                 exp_el, _ = _try_query(page, selectors.get("detail_expiration"))
                 if exp_el:
                     exp_text = (exp_el.inner_text() or "").strip()
+                if not exp_text:
+                    body_text = page.inner_text("body") if page.locator("body").count() else (result["html"] or "")
+                    m = re.search(
+                        r"Expiration Date[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
+                        body_text,
+                    )
+                    if m:
+                        exp_text = m.group(1)
                 if not exp_text:
                     m = re.search(
                         r"Expiration Date[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
@@ -426,18 +521,33 @@ def _dre_lookup_impl(
                     if m:
                         exp_text = m.group(1)
                 if exp_text:
-                    result["expiration_raw"] = exp_text
-                    result["expiration"] = _normalize_date(exp_text) or exp_text
+                    result["expiration_raw"] = exp_text.strip()
+                    result["expiration"] = _normalize_date(exp_text) or exp_text.strip()
                     result["found"] = True
 
-                # Extract name from detail page
+                # Extract name from detail page (best-effort)
                 name_el, _ = _try_query(page, selectors.get("detail_name"))
                 if name_el:
                     result["name"] = (name_el.inner_text() or "").strip()
+                else:
+                    result["name"] = target_name or result.get("name")
+
                 steps.append({"step": "extract_expiration", "ok": bool(result["expiration"]),
                               "raw": exp_text, "normalized": result["expiration"]})
+
+                # Hold the browser visible for a moment so the panel sees the detail page
+                try:
+                    page.wait_for_timeout(2500)
+                except Exception:
+                    pass
             else:
-                steps.append({"step": "click_detail", "ok": False, "error": "no detail link"})
+                steps.append({"step": "click_detail", "ok": False,
+                              "error": "no clickable detail link found via any strategy"})
+                # Hold the results page visible so the panel sees what happened
+                try:
+                    page.wait_for_timeout(5000)
+                except Exception:
+                    pass
 
         else:
             # Single-page: try to extract expiration directly from the first row
