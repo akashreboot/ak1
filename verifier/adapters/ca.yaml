@@ -1,0 +1,43 @@
+# California DRE adapter — versioned configuration
+#
+# In production this is loaded from S3, registered in Postgres with a feature
+# flag, canary-rolled to 5% of CA traffic, auto-promoted on success-rate metrics.
+# Bug in the field?  Edit YAML, ship a new version, NO code release.
+
+state: CA
+version: v1
+last_updated: 2026-05-17
+maturity: native_adapter   # native_adapter | ai_primitives | vision_only
+search_url: https://www2.dre.ca.gov/PublicASP/pplinfo.asp
+
+steps:
+  - id: navigate
+    action: goto
+    url: "{search_url}"
+    timeout_ms: 15000
+
+  - id: enter_license
+    action: fill
+    selector: "#sel_LicID"
+    value: "{license_no}"
+    fallback_ai: "the License ID input field"
+
+  - id: submit
+    action: click
+    selector: "input[type='submit'][value*='Find']"
+    fallback_ai: "the Find button"
+
+  - id: extract_expiration
+    action: extract
+    field: license_expiration
+    selector: "td:has-text('Expiration Date') + td"
+    fallback_ai: "the License Expiration Date value on the page"
+    confidence_threshold: 0.85
+
+retry_policy:
+  max_attempts: 3
+  initial_backoff_ms: 1000
+  multiplier: 2.0
+  jitter: true
+
+concurrency_cap: 10   # max concurrent CA sessions to avoid DRE rate-limit
