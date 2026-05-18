@@ -234,8 +234,8 @@ st.markdown(
 st.write("")
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/8_Panel_QA.py", label="← Panel Q&A", use_container_width=True)
+    st.page_link("pages/8_Panel_QA.py", label="← Panel Q&A", width="stretch")
 with c2:
-    st.page_link("app.py", label="Back to Home →", use_container_width=True)
+    st.page_link("app.py", label="Back to Home →", width="stretch")
 
 footer()

@@ -277,8 +277,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/7_Knowledge_Guide.py", label="← Knowledge Guide", use_container_width=True)
+    st.page_link("pages/7_Knowledge_Guide.py", label="← Knowledge Guide", width="stretch")
 with c2:
-    st.page_link("pages/9_Presentation_Script.py", label="Next: Presentation Script →", use_container_width=True)
+    st.page_link("pages/9_Presentation_Script.py", label="Next: Presentation Script →", width="stretch")
 
 footer()

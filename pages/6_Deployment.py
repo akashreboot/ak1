@@ -105,7 +105,7 @@ with s3:
 
 # Throughput
 st.markdown("### Throughput trajectory after rollout (illustrative)")
-st.plotly_chart(throughput_fig(), use_container_width=True, config={"displayModeBar": False})
+st.plotly_chart(throughput_fig(), width="stretch", config={"displayModeBar": False})
 
 divider()
 
@@ -183,8 +183,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/5_Resilience.py", label="← Resilience", use_container_width=True)
+    st.page_link("pages/5_Resilience.py", label="← Resilience", width="stretch")
 with c2:
-    st.page_link("pages/7_Knowledge_Guide.py", label="Next: Knowledge Guide →", use_container_width=True)
+    st.page_link("pages/7_Knowledge_Guide.py", label="Next: Knowledge Guide →", width="stretch")
 
 footer()

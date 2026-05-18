@@ -153,8 +153,8 @@ st.markdown(
 st.write("")
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("app.py", label="← Home", use_container_width=True)
+    st.page_link("app.py", label="← Home", width="stretch")
 with c2:
-    st.page_link("pages/2_System_Architecture.py", label="Next: System Architecture →", use_container_width=True)
+    st.page_link("pages/2_System_Architecture.py", label="Next: System Architecture →", width="stretch")
 
 footer()

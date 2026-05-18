@@ -74,7 +74,7 @@ def _color_result(v):
 
 
 styled = df_view.style.map(_color_result, subset=["result"])
-st.dataframe(styled, use_container_width=True, height=420, hide_index=True)
+st.dataframe(styled, width="stretch", height=420, hide_index=True)
 
 divider()
 
@@ -112,7 +112,7 @@ with cols[1]:
             apath = project_root / p
             if apath.exists():
                 label = Path(p).stem.replace("-", " ").title()
-                st.image(str(apath), caption=label, use_container_width=True)
+                st.image(str(apath), caption=label, width="stretch")
             else:
                 st.caption(f"⚠ missing: `{p}`")
     else:

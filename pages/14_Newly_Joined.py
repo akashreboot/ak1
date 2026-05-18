@@ -57,7 +57,7 @@ with b2:
 
 display = [a for a in agents if (not only_demo or a["onboarding"].get("is_real_demo_target"))]
 
-run_all = st.button(f"▶  Run verification for all {len(display)} agents", use_container_width=False)
+run_all = st.button(f"▶  Run verification for all {len(display)} agents", width="content")
 
 # Table
 divider()
@@ -90,7 +90,7 @@ def _color_status(v):
 
 st.dataframe(
     df.style.map(_color_status, subset=["Status"]),
-    use_container_width=True,
+    width="stretch",
     hide_index=True,
     height=420,
 )
@@ -138,12 +138,12 @@ if run_all:
 st.write("")
 nav1, nav2, nav3, nav4 = st.columns(4)
 with nav1:
-    st.page_link("pages/10_Live_Demo.py", label="🟢  Live Demo (single)", use_container_width=True)
+    st.page_link("pages/10_Live_Demo.py", label="🟢  Live Demo (single)", width="stretch")
 with nav2:
-    st.page_link("pages/11_Verification_Ledger.py", label="📒  Ledger", use_container_width=True)
+    st.page_link("pages/11_Verification_Ledger.py", label="📒  Ledger", width="stretch")
 with nav3:
-    st.page_link("pages/12_HITL_Queue.py", label="👤  HITL Queue", use_container_width=True)
+    st.page_link("pages/12_HITL_Queue.py", label="👤  HITL Queue", width="stretch")
 with nav4:
-    st.page_link("pages/15_Adapter_Registry.py", label="🗂️  Adapter Registry", use_container_width=True)
+    st.page_link("pages/15_Adapter_Registry.py", label="🗂️  Adapter Registry", width="stretch")
 
 footer()

@@ -189,7 +189,7 @@ divider()
 st.markdown("### Estimated steady-state cost (~5,000 verifications/week)")
 ccol1, ccol2 = st.columns([1.4, 1])
 with ccol1:
-    st.plotly_chart(cost_breakdown_fig(), use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(cost_breakdown_fig(), width="stretch", config={"displayModeBar": False})
 with ccol2:
     st.markdown(
         f"""
@@ -212,8 +212,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/3_Workflow_Walkthrough.py", label="← Workflow Walkthrough", use_container_width=True)
+    st.page_link("pages/3_Workflow_Walkthrough.py", label="← Workflow Walkthrough", width="stretch")
 with c2:
-    st.page_link("pages/5_Resilience.py", label="Next: Resilience & Failures →", use_container_width=True)
+    st.page_link("pages/5_Resilience.py", label="Next: Resilience & Failures →", width="stretch")
 
 footer()

@@ -26,7 +26,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 g = architecture_graph()
-st.graphviz_chart(g, use_container_width=True)
+st.graphviz_chart(g, width="stretch")
 
 divider()
 
@@ -158,8 +158,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/1_Problem_Statement.py", label="← Problem Statement", use_container_width=True)
+    st.page_link("pages/1_Problem_Statement.py", label="← Problem Statement", width="stretch")
 with c2:
-    st.page_link("pages/3_Workflow_Walkthrough.py", label="Next: Workflow Walkthrough →", use_container_width=True)
+    st.page_link("pages/3_Workflow_Walkthrough.py", label="Next: Workflow Walkthrough →", width="stretch")
 
 footer()

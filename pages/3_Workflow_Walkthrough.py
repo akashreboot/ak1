@@ -49,7 +49,7 @@ with demo_col:
         ("Write ledger entry",       "row #ver_88241 · s3://real-verify/...trace.zip",          "Postgres+S3", 0.4, "ok"),
     ]
 
-    run = st.button("▶  Run verification", use_container_width=True)
+    run = st.button("▶  Run verification", width="stretch")
     log_box = st.container()
 
     if run:
@@ -89,7 +89,7 @@ with demo_col:
 
 with side_col:
     st.markdown("### Step graph")
-    st.graphviz_chart(workflow_sequence_graph(), use_container_width=True)
+    st.graphviz_chart(workflow_sequence_graph(), width="stretch")
 
     card(
         "Why this is a workflow, not a script",
@@ -111,7 +111,7 @@ st.markdown("### What it looks like in aggregate")
 fcol, kcol = st.columns([1.5, 1])
 with fcol:
     st.markdown("##### Funnel — last 10,000 events (synthetic)")
-    st.plotly_chart(failure_funnel_fig(), use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(failure_funnel_fig(), width="stretch", config={"displayModeBar": False})
 
 with kcol:
     st.markdown("##### Per-step SLOs")
@@ -147,8 +147,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/2_System_Architecture.py", label="← System Architecture", use_container_width=True)
+    st.page_link("pages/2_System_Architecture.py", label="← System Architecture", width="stretch")
 with c2:
-    st.page_link("pages/4_Tech_Stack.py", label="Next: Tech Stack & Why →", use_container_width=True)
+    st.page_link("pages/4_Tech_Stack.py", label="Next: Tech Stack & Why →", width="stretch")
 
 footer()

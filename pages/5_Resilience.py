@@ -19,7 +19,7 @@ st.write("")
 top, side = st.columns([1.5, 1])
 with top:
     st.markdown("### Defense-in-depth — six fallback layers")
-    st.plotly_chart(resilience_pyramid_fig(), use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(resilience_pyramid_fig(), width="stretch", config={"displayModeBar": False})
     st.markdown(
         f"""
         <div style="color:{REAL_MUTED}; font-size:0.9rem; margin-top:-10px;">
@@ -101,7 +101,7 @@ with q1:
         )
 
     st.markdown("##### Per-state adapter maturity (today's snapshot)")
-    st.plotly_chart(state_coverage_map_fig(), use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(state_coverage_map_fig(), width="stretch", config={"displayModeBar": False})
 
 with q2:
     c1, c2 = st.columns([1.2, 1])
@@ -222,8 +222,8 @@ divider()
 
 c1, c2 = st.columns([1, 1])
 with c1:
-    st.page_link("pages/4_Tech_Stack.py", label="← Tech Stack", use_container_width=True)
+    st.page_link("pages/4_Tech_Stack.py", label="← Tech Stack", width="stretch")
 with c2:
-    st.page_link("pages/6_Deployment.py", label="Next: Deployment Strategy →", use_container_width=True)
+    st.page_link("pages/6_Deployment.py", label="Next: Deployment Strategy →", width="stretch")
 
 footer()

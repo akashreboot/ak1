@@ -91,19 +91,19 @@ else:
         # Real working buttons — these resolve the case and update the ledger
         b1, b2, b3, b4 = st.columns(4)
         with b1:
-            if st.button(f"✅ Approve CRM value", key=f"approve_crm_{case['id']}", use_container_width=True):
+            if st.button(f"✅ Approve CRM value", key=f"approve_crm_{case['id']}", width="stretch"):
                 _resolve(case, "approved_crm", "match", f"Operator approved CRM value ({crm.get('expires_at','')})")
                 st.rerun()
         with b2:
-            if st.button(f"✅ Approve scraped value", key=f"approve_dre_{case['id']}", use_container_width=True):
+            if st.button(f"✅ Approve scraped value", key=f"approve_dre_{case['id']}", width="stretch"):
                 _resolve(case, "approved_scraped", "mismatch", f"Operator approved scraped value ({dre_data.get('expiration','')})")
                 st.rerun()
         with b3:
-            if st.button(f"🚫 Reject (open ticket)", key=f"reject_{case['id']}", use_container_width=True):
+            if st.button(f"🚫 Reject (open ticket)", key=f"reject_{case['id']}", width="stretch"):
                 _resolve(case, "rejected", "mismatch", "Rejected — manual investigation ticket opened")
                 st.rerun()
         with b4:
-            if st.button(f"⟳ Re-run verification", key=f"rerun_{case['id']}", use_container_width=True):
+            if st.button(f"⟳ Re-run verification", key=f"rerun_{case['id']}", width="stretch"):
                 _resolve(case, "re_run", "pending_review", "Operator requested re-run")
                 st.rerun()
 

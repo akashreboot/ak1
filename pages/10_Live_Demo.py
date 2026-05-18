@@ -185,7 +185,7 @@ with c2:
 with c3:
     reset = st.toggle("Reset ledger first", value=False)
 with c4:
-    run_clicked = st.button("▶  Run verification", use_container_width=True)
+    run_clicked = st.button("▶  Run verification", width="stretch")
 
 # ── Trace placeholder ────────────────────────────────────────────────────
 st.markdown("### 3 · Live trace")
@@ -309,7 +309,7 @@ if run_clicked:
                     apath = project_root / p
                     if apath.exists():
                         label = Path(p).stem.replace("-", " ").replace("_", " ").title()
-                        cols[i % 3].image(str(apath), caption=label, use_container_width=True)
+                        cols[i % 3].image(str(apath), caption=label, width="stretch")
 
 divider()
 
@@ -353,12 +353,12 @@ with b:
 st.write("")
 nav1, nav2, nav3, nav4 = st.columns(4)
 with nav1:
-    st.page_link("pages/14_Newly_Joined.py", label="🆕  Newly Joined", use_container_width=True)
+    st.page_link("pages/14_Newly_Joined.py", label="🆕  Newly Joined", width="stretch")
 with nav2:
-    st.page_link("pages/11_Verification_Ledger.py", label="📒  Ledger", use_container_width=True)
+    st.page_link("pages/11_Verification_Ledger.py", label="📒  Ledger", width="stretch")
 with nav3:
-    st.page_link("pages/12_HITL_Queue.py", label="👤  HITL Queue", use_container_width=True)
+    st.page_link("pages/12_HITL_Queue.py", label="👤  HITL Queue", width="stretch")
 with nav4:
-    st.page_link("pages/15_Adapter_Registry.py", label="🗂️  Adapter Registry", use_container_width=True)
+    st.page_link("pages/15_Adapter_Registry.py", label="🗂️  Adapter Registry", width="stretch")
 
 footer()

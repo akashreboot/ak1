@@ -78,7 +78,9 @@ def _dre_lookup_camoufox_impl(
         "candidates": [], "runner": "camoufox",
     }
 
-    with Camoufox(headless=not headed, geoip=True) as browser:
+    # NOTE: geoip=True requires the `camoufox[geoip]` extra; we don't depend on
+    # it. Plain Camoufox still gives us the full Firefox stealth fingerprint.
+    with Camoufox(headless=not headed) as browser:
         page = browser.new_page()
         page.goto(base_url, timeout=25000, wait_until="domcontentloaded")
         sc = _shot(page, "dre-camoufox-landing")

@@ -130,10 +130,10 @@ divider()
 st.markdown("### Navigate the deck →")
 nav1, nav2, nav3 = st.columns(3)
 with nav1:
-    st.page_link("pages/1_Problem_Statement.py", label="📋  Start with the problem", use_container_width=True)
+    st.page_link("pages/1_Problem_Statement.py", label="📋  Start with the problem", width="stretch")
 with nav2:
-    st.page_link("pages/2_System_Architecture.py", label="🏗️  Jump to architecture", use_container_width=True)
+    st.page_link("pages/2_System_Architecture.py", label="🏗️  Jump to architecture", width="stretch")
 with nav3:
-    st.page_link("pages/9_Presentation_Script.py", label="🎤  Read the talk track", use_container_width=True)
+    st.page_link("pages/9_Presentation_Script.py", label="🎤  Read the talk track", width="stretch")
 
 footer()

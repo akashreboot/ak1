@@ -72,7 +72,7 @@ def _color_tier(v):
 
 st.dataframe(
     df.style.map(_color_tier, subset=["Declared tier", "Effective tier"]),
-    use_container_width=True, hide_index=True, height=300,
+    width="stretch", hide_index=True, height=300,
 )
 
 divider()

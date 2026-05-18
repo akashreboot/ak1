@@ -72,7 +72,7 @@ with c1:
     )
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(gridcolor="rgba(255,255,255,0.06)")
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 with c2:
     st.markdown("##### Per-state success rate")
@@ -94,7 +94,7 @@ with c2:
         margin=dict(l=10, r=10, t=10, b=10),
         yaxis=dict(range=[0, 110], gridcolor="rgba(255,255,255,0.06)"),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 divider()
 
@@ -113,7 +113,7 @@ fig.update_layout(
     xaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
     yaxis=dict(gridcolor="rgba(255,255,255,0.06)"),
 )
-st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 divider()
 
@@ -143,6 +143,6 @@ with c2:
             margin=dict(l=10, r=10, t=10, b=10),
             showlegend=True,
         )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
 footer()
