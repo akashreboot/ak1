@@ -436,14 +436,59 @@ def _dre_lookup_impl(
             cand = {}
             for label, col_sel in col_map.items():
                 try:
-                    el = row.query_selector(col_sel)
-                    if el:
-                        cand[label] = (el.inner_text() or "").strip()
+                    # ":scope" means "the row element itself" — used when each
+                    # result IS an anchor (TREC-style) rather than a table row.
+                    if col_sel == ":scope":
+                        cand[label] = (row.inner_text() or "").strip()
+                    else:
+                        el = row.query_selector(col_sel)
+                        if el:
+                            cand[label] = (el.inner_text() or "").strip()
                 except Exception:
                     pass
             if cand:
+                # If the row IS an anchor, remember its href for direct navigation
+                try:
+                    href = row.get_attribute("href")
+                    if href:
+                        cand["href"] = href
+                except Exception:
+                    pass
                 result["candidates"].append(cand)
         steps.append({"step": "parse_results", "count": len(result["candidates"])})
+
+        # Fallback: if no candidates parsed (selectors didn't match the
+        # actual page), look for any detail-style anchors on the page and
+        # synthesize candidates from them. Handles TREC's "results = list
+        # of name links" layout when the selectors above miss.
+        if not result["candidates"] and flow == "multi_page_detail":
+            for sel in _as_list(selectors.get("detail_link_in_row", "a[href*='detail']")):
+                if sel == ":scope":
+                    continue
+                try:
+                    anchors = page.query_selector_all(sel)
+                    for a in anchors[:20]:
+                        try:
+                            txt = (a.inner_text() or "").strip()
+                            href = a.get_attribute("href") or ""
+                            if href and txt:
+                                result["candidates"].append({
+                                    "name": txt, "href": href,
+                                    "license_type": expected_license_type or "",
+                                    "status": "Active",  # re-verified on detail page
+                                })
+                        except Exception:
+                            continue
+                    if result["candidates"]:
+                        break
+                except Exception:
+                    continue
+            if result["candidates"]:
+                steps.append({"step": "parse_results_fallback_anchors",
+                              "count": len(result["candidates"])})
+                rows = page.query_selector_all(
+                    _as_list(selectors.get("detail_link_in_row", "a[href*='detail']"))[-1]
+                )
 
         # 5) Multi-page flow: pick best row (name + license_type + status),
         #    then click through to detail page, then extract expiration.
@@ -477,11 +522,24 @@ def _dre_lookup_impl(
             href_for_detail = None
 
             # Strategy A: extract href, navigate directly (bypasses all click handlers)
+            # If the candidate already carries a pre-extracted href (TREC-style
+            # anchor-as-row case), use it first.
             try:
-                link = target_row.query_selector("a[href]")
-                if link:
-                    href_for_detail = link.get_attribute("href")
-                # Also check for any anchor with href on the whole page that contains the name
+                href_for_detail = target_cand.get("href")
+                # Or read the anchor inside the row
+                if not href_for_detail:
+                    link = target_row.query_selector("a[href]")
+                    if link:
+                        href_for_detail = link.get_attribute("href")
+                # If the row itself IS an anchor (TREC), get its own href
+                if not href_for_detail:
+                    try:
+                        own_href = target_row.get_attribute("href")
+                        if own_href:
+                            href_for_detail = own_href
+                    except Exception:
+                        pass
+                # Last-ditch: scan the page for an anchor whose text matches the name
                 if not href_for_detail and target_name:
                     for a in page.query_selector_all("a[href]"):
                         try:

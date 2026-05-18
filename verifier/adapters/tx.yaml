@@ -1,15 +1,25 @@
-# Texas TREC adapter — REAL site.
+# Texas TREC adapter — REAL site, v2.
 # https://www.trec.texas.gov/license-search/
 #
-# Accepts name or license number. Returns multiple rows (different license
-# types per holder). Disambiguation by license type + status REQUIRED.
+# Real form (per screenshots captured 2026-05):
+#   1. Search page has:
+#        - Text input: Name or License Number (accepts last,first OR a license #)
+#        - Dropdown: License Type (Broker or Sales Agent)
+#        - Dropdown: License Status
+#        - SEARCH button
+#   2. After submit, results render as a list of name cards, each with a
+#      clickable name link of the form ?detail_id=NNNNNNN
+#   3. Click the name → detail page with full info including
+#      Expiration Date in MM/DD/YYYY format.
+#
+# A specific license # (e.g. 839005) almost always returns exactly 1 result.
 
 state_code: TX
 state_full_name: Texas
-version: v1
+version: v2
 last_updated: 2026-05-18
 maturity: native_adapter
-anti_bot_tier: T1                        # mostly works; some TREC subpages have edge cases
+anti_bot_tier: T1
 
 profile_source:
   joinreal_url_pattern: "https://onereal.com/profile/{slug}"
@@ -19,34 +29,58 @@ profile_source:
 
 dre:
   search_url: "https://www.trec.texas.gov/license-search/"
-  search_method: name_or_license_number   # both accepted
+  search_method: name_or_license_number
   expected_license_types:
     - "Sales Agent"
     - "Broker"
-    - "Real Estate Broker"
-    - "Real Estate Sales Agent"
+    - "Real Estate - Sales Agent License"
+    - "Real Estate - Broker License"
   disambiguation_required: true
+  flow: multi_page_detail
 
   selectors:
-    name_input: "input[name='lic_name']"
-    license_input: "input[name='lic_hp']"
-    industry_select: "select[name='industry']"
-    submit_button: "input[name='license_search'], button[type='submit']"
-    result_rows: "table tbody tr"
+    license_input:
+      - "input[name='lic_name']"
+      - "input[name='Name']"
+      - "input[type='text']:visible"
+
+    submit_button:
+      - "input[name='license_search']"
+      - "input[type='submit'][value*='Search' i]"
+      - "button:has-text('Search')"
+
+    # TREC renders each result as a section with a name link to ?detail_id=N.
+    # The result-row selector matches the anchor itself; row parsing extracts
+    # the visible name. The detail-link selector reuses the same anchor.
+    result_rows:
+      - "a[href*='detail_id']"
+      - "table tbody tr:has(a)"
+      - "li:has(a[href*='detail_id'])"
+
     result_columns:
-      name: "td:nth-child(1)"
-      license_number: "td:nth-child(2)"
-      license_type: "td:nth-child(3)"
-      status: "td:nth-child(4)"
-      expiration: "td:nth-child(5)"
-      city: "td:nth-child(6)"
+      name: ":scope"            # the anchor's own text is the agent name
+      license_number: ":scope"  # fallback — we'll re-extract on the detail page
+
+    detail_link_in_row:
+      - ":scope"                # the row IS the link
+      - "a[href*='detail_id']"
+      - "a"
+
+    detail_expiration:
+      - "text=/Expiration Date[:\\s]+(\\d{2}\\/\\d{2}\\/\\d{4})/i"
+      - "[data-field='expiration']"
+
+    detail_name:
+      - "h1"
+      - "h2"
+
     no_results_marker: "text=/No license holder found|no records/i"
 
   ai_fallback_descriptions:
-    license_input: "the License Number input field on the search form"
-    name_input: "the Name input field (Last, First format)"
-    submit_button: "the Search button"
-    expiration_field: "the expiration date value for the matching row"
+    license_input: "the Name or License Number text input on the TREC license search page"
+    submit_button: "the SEARCH submit button on the search form"
+    detail_link:   "a link in the results list that opens a license-detail page (href contains 'detail_id=')"
+    expiration_field: "the Expiration Date value on the license-detail page (format MM/DD/YYYY)"
 
 retry_policy:
   max_attempts: 3
