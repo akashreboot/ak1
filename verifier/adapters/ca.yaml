@@ -1,43 +1,35 @@
-# California DRE adapter — versioned configuration
+# California DRE adapter — versioned configuration.
 #
-# In production this is loaded from S3, registered in Postgres with a feature
-# flag, canary-rolled to 5% of CA traffic, auto-promoted on success-rate metrics.
-# Bug in the field?  Edit YAML, ship a new version, NO code release.
+# In production this YAML lives in S3, is registered in Postgres with a
+# feature flag, canaries to 5% of CA traffic, auto-promotes on success-rate
+# metrics. A bug in the field gets fixed by editing YAML — NO code release.
+#
+# For the live demo the search_url points at our local Flask mock by default.
+# Set REAL_DRE_BASE_CA=https://www2.dre.ca.gov to hit the real site.
 
 state: CA
 version: v1
 last_updated: 2026-05-17
-maturity: native_adapter   # native_adapter | ai_primitives | vision_only
-search_url: https://www2.dre.ca.gov/PublicASP/pplinfo.asp
+maturity: native_adapter
+search_url: http://127.0.0.1:8802/PublicASP/pplinfo.asp
+search_path: /PublicASP/pplinfo.asp
 
-steps:
-  - id: navigate
-    action: goto
-    url: "{search_url}"
-    timeout_ms: 15000
+selectors:
+  license_input: "#sel_LicID"
+  submit_button: "button[type='submit']"
+  expiration_field: "[data-field='expiration']"
+  agent_name_field: "[data-field='name']"
+  no_results_marker: "[data-no-results]"
 
-  - id: enter_license
-    action: fill
-    selector: "#sel_LicID"
-    value: "{license_no}"
-    fallback_ai: "the License ID input field"
-
-  - id: submit
-    action: click
-    selector: "input[type='submit'][value*='Find']"
-    fallback_ai: "the Find button"
-
-  - id: extract_expiration
-    action: extract
-    field: license_expiration
-    selector: "td:has-text('Expiration Date') + td"
-    fallback_ai: "the License Expiration Date value on the page"
-    confidence_threshold: 0.85
+ai_fallback_descriptions:
+  license_input: "the License ID input field on the search form"
+  submit_button: "the Find button on the search form"
+  expiration_field: "the License Expiration Date value on the agent's listing page"
+  agent_name_field: "the Licensee Name field on the agent's listing page"
 
 retry_policy:
   max_attempts: 3
   initial_backoff_ms: 1000
   multiplier: 2.0
-  jitter: true
 
-concurrency_cap: 10   # max concurrent CA sessions to avoid DRE rate-limit
+concurrency_cap: 10

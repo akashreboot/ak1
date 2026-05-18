@@ -1,41 +1,70 @@
-# Real · Agent Verification System — Presentation Deck
+# Real · Agent Verification System — Presentation + Working Build
 
-An interactive Streamlit deck proposing a durable, AI-augmented browser-automation system for verifying newly-onboarded Real agents against JoinReal.com and the 50 state Departments of Real Estate.
+An interactive Streamlit deck **and** a working implementation of the proposed durable, AI-augmented agent verification system. Built for the panel with **Mark Hinojosa** (Manager, Engineering — AI & Automation @ Real).
 
-Built for the panel with **Mark Hinojosa** (Manager, Engineering — AI & Automation @ Real).
+The deck (9 pages) proposes the architecture. The working build (4 more pages) lets you **watch it run** end-to-end: real Playwright Chromium, real Claude API (when key is set), real SQLite ledger, real HITL queue.
 
-## Run locally
+## Quick start
 
-```bash
-python -m venv .venv && source .venv/bin/activate
+```powershell
+# Windows / PowerShell
 pip install -r requirements.txt
-streamlit run app.py
+playwright install chromium           # ~200MB one-time download
+$env:ANTHROPIC_API_KEY = "sk-ant-..."  # optional — enables real Claude calls
+python -m streamlit run app.py
 ```
 
 Open http://localhost:8501.
 
-## Deck structure
+> If `streamlit` isn't on PATH, use `python -m streamlit run app.py`.
 
-| Page                       | What it covers                                                                  |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| `app.py` — Home            | Hero, why-this-matters, navigation                                              |
-| `1_Problem_Statement`      | Problem re-statement, 11 events, assumptions / limitations / open questions     |
-| `2_System_Architecture`   | Six-layer architecture, system diagram, end-to-end data flow                    |
-| `3_Workflow_Walkthrough`  | Live animated trace of one verification + funnel / SLOs                         |
-| `4_Tech_Stack`            | Every choice + alternatives I rejected, with cost breakdown                     |
-| `5_Resilience`            | Defense-in-depth pyramid, Mark's 3 questions answered, state adapter map        |
-| `6_Deployment`            | Topology, scaling, release strategy, security/compliance, SLOs                  |
-| `7_Knowledge_Guide`       | Plain-English explainer of every tool + alternatives + glossary                 |
-| `8_Panel_QA`              | 20 anticipated questions grouped by theme, with soundbite + detail answers     |
-| `9_Presentation_Script`   | Minute-by-minute talk track + rehearsal tips                                    |
+## Demo flow (~3 minutes)
 
-## Why this design (the elevator pitch)
+1. Open the **Live Demo** page (sidebar)
+2. Pick scenario: **Jordan Rivera (CA · happy path)**
+3. Toggle **Show Chromium window** = on
+4. Click **▶ Run verification**
+5. A real Chromium window pops up, drives the local JoinReal + CA DRE mocks
+6. Live trace streams in Streamlit, ledger row lands
+7. Open **Verification Ledger** — there's the row, with the captured screenshot
+8. Back to **Live Demo** — pick **Maria Delgado (TX · mismatch)** → run
+9. Workflow ends in quarantine
+10. Open **HITL Queue** — Slack-styled alert appears with working buttons
+11. Click **Approve CRM value** → ledger row updates, case resolved
+12. Open **Metrics Dashboard** — live counts from the SQLite ledger
 
-- **Durable workflow as the spine** (Temporal.io) — crash-safe, idempotent, signal-driven
-- **Cheap-by-default browser layer** (Playwright + Stagehand selector cache) with AI re-derivation on cache miss
-- **Vision fallback** (Claude Opus 4.7) when DOM extraction is unsure
-- **Adapter-as-data** for 50 DRE flows — versioned YAML, no code redeploys to fix a state
-- **HITL via workflow signals** — Slack alert + inline buttons, no separate ticketing system
+## What's REAL vs what's a production stand-in
+
+| Architecture slide says | What runs in this build |
+|---|---|
+| Temporal.io | Generator-based saga engine in `verifier/workflow.py` — same retry / replay / signal semantics |
+| Playwright + Stagehand + Browserbase | Real Playwright Chromium against local Flask mocks of JoinReal + 3 state DREs |
+| Claude Opus vision + Haiku classifier | Real Anthropic SDK calls (if `ANTHROPIC_API_KEY` is set), deterministic mock otherwise |
+| Postgres ledger | SQLite at `data/ledger.db` (same SQL semantics) |
+| Redis selector cache | In-memory dict with TTL in `verifier/cache.py` |
+| EventBridge + DynamoDB outbox | Streamlit button + in-process queue |
+| Slack HITL alerts | Slack-styled alert rendered in the HITL Queue page with real working buttons |
+| Datadog | Live Metrics Dashboard page reading from SQLite |
+| S3 artifact storage | Local `data/screenshots/` directory |
+
+## Pages
+
+| # | Page | Purpose |
+|---|---|---|
+| Home | `app.py` | Hero + nav |
+| 1 | Problem Statement | The brief, 11 events, assumptions |
+| 2 | System Architecture | Six layers, system diagram |
+| 3 | Workflow Walkthrough | Animated trace |
+| 4 | Tech Stack | Every pick + rejected alternatives + cost |
+| 5 | Resilience | Failure handling, Mark's 3 questions |
+| 6 | Deployment | Topology, SLOs, security |
+| 7 | Knowledge Guide | Plain-English tool glossary |
+| 8 | Panel Q&A | 20 anticipated questions |
+| 9 | Presentation Script | Minute-by-minute talk track |
+| **10** | **Live Demo** | **Run the real workflow against the mock sites** |
+| **11** | **Verification Ledger** | **Browse real SQLite ledger** |
+| **12** | **HITL Queue** | **Resolve cases via working Slack-style buttons** |
+| **13** | **Metrics Dashboard** | **Live metrics from real ledger** |
 
 ## Three sentences to memorize
 
@@ -43,16 +72,39 @@ Open http://localhost:8501.
 2. *"Six layers, one durable workflow."*
 3. *"AI is a fallback, not the headline."*
 
-## Files
+## File layout
 
 ```
-.
-├── app.py                       # Home / hero
-├── components/
-│   ├── styles.py                # Shared CSS, hero, card, stat_card, page_setup
-│   └── diagrams.py              # Graphviz architecture + Plotly figures
-├── pages/                       # 9 deck pages (auto-discovered by Streamlit)
-├── .streamlit/config.toml       # Dark theme, brand colors
-├── requirements.txt
-└── README.md
+ak1/
+├── app.py                          # Home / hero
+├── components/                     # Shared CSS + Graphviz/Plotly diagram helpers
+├── pages/                          # 13 Streamlit pages (9 deck + 4 working build)
+├── verifier/                       # The working implementation
+│   ├── workflow.py                 # Saga engine (Temporal stand-in)
+│   ├── activities.py               # The 6 activities the workflow orchestrates
+│   ├── playwright_runner.py        # Real Chromium automation
+│   ├── llm_claude.py               # Anthropic SDK wrapper (with mock fallback)
+│   ├── adapter_loader.py           # YAML per-state DRE adapter loader
+│   ├── adapters/                   # ca.yaml, tx.yaml, hi.yaml — versioned configs
+│   ├── cache.py                    # In-memory selector cache (Stagehand pattern)
+│   ├── db.py                       # SQLite ledger + HITL queue
+│   ├── fixtures.py                 # 3 sample agents (happy / mismatch / HITL)
+│   ├── mock_sites/                 # Flask mocks of JoinReal + DREs
+│   └── trace.py                    # Span emission
+├── data/                           # Runtime data (gitignored): ledger.db + screenshots/
+└── requirements.txt
+```
+
+## Optional configuration
+
+```powershell
+# Use real Claude for extraction + classification
+$env:ANTHROPIC_API_KEY = "sk-ant-..."
+
+# Pin specific Claude model IDs (defaults shown)
+$env:CLAUDE_MODEL_HEAVY = "claude-opus-4-7"
+$env:CLAUDE_MODEL_LIGHT = "claude-haiku-4-5-20251001"
+
+# Point an adapter at a real DRE site instead of the local mock
+$env:REAL_DRE_BASE_CA = "https://www2.dre.ca.gov"
 ```

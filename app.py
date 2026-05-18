@@ -20,6 +20,12 @@ st.sidebar.page_link("pages/6_Deployment.py", label="Deployment Strategy", icon=
 st.sidebar.page_link("pages/7_Knowledge_Guide.py", label="Knowledge Guide", icon="📚")
 st.sidebar.page_link("pages/8_Panel_QA.py", label="Panel Q&A", icon="🎯")
 st.sidebar.page_link("pages/9_Presentation_Script.py", label="Presentation Script", icon="🎤")
+st.sidebar.markdown("---")
+st.sidebar.markdown("**Working build**")
+st.sidebar.page_link("pages/10_Live_Demo.py", label="Live Demo", icon="🟢")
+st.sidebar.page_link("pages/11_Verification_Ledger.py", label="Verification Ledger", icon="📒")
+st.sidebar.page_link("pages/12_HITL_Queue.py", label="HITL Queue", icon="👤")
+st.sidebar.page_link("pages/13_Metrics_Dashboard.py", label="Metrics Dashboard", icon="📊")
 
 with st.sidebar:
     st.markdown(

@@ -1,0 +1,29 @@
+# Texas DRE adapter (Texas Real Estate Commission - TREC).
+# Local Flask mock at port 8803.
+
+state: TX
+version: v1
+last_updated: 2026-05-17
+maturity: native_adapter
+search_url: http://127.0.0.1:8803/Public/LicenseeNameSearch.aspx
+search_path: /Public/LicenseeNameSearch.aspx
+
+selectors:
+  license_input: "#licNumber"
+  submit_button: "button[type='submit']"
+  expiration_field: "[data-field='expiration']"
+  agent_name_field: "[data-field='name']"
+  no_results_marker: "[data-no-results]"
+
+ai_fallback_descriptions:
+  license_input: "the License Number input field"
+  submit_button: "the Search button"
+  expiration_field: "the expiration date field on the licensee detail page"
+  agent_name_field: "the licensee name field on the detail page"
+
+retry_policy:
+  max_attempts: 3
+  initial_backoff_ms: 1000
+  multiplier: 2.0
+
+concurrency_cap: 8

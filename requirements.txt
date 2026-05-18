@@ -2,3 +2,9 @@ streamlit>=1.40.0
 plotly>=5.24.0
 pandas>=2.2.0
 graphviz>=0.20.0
+
+# Working-build dependencies
+flask>=3.0.0
+pyyaml>=6.0.1
+playwright>=1.49.0
+anthropic>=0.40.0

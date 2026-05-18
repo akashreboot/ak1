@@ -6,3 +6,6 @@ venv/
 .DS_Store
 .streamlit/secrets.toml
 *.log
+data/ledger.db
+data/ledger.db-*
+data/screenshots/
