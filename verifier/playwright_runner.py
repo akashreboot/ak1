@@ -243,23 +243,120 @@ def _as_list(value) -> list:
     return value if isinstance(value, list) else [value]
 
 
-def _try_fill(page, selectors, value, timeout: int = 6000) -> Optional[str]:
+def _try_fill(
+    page, selectors, value, timeout: int = 6000,
+    label_hint: Optional[str] = None,
+    placeholder_hint: Optional[str] = None,
+    scope=None,
+) -> Optional[str]:
+    """Fill a value into the first matching input.
+
+    Strategies (in order):
+      1. Each CSS selector in `selectors`
+      2. `page.get_by_label(label_hint)` — Playwright text-based label match
+      3. `page.get_by_placeholder(placeholder_hint)`
+    After filling, the value is read back; mismatch is treated as failure
+    so we don't claim success on a stale input.
+    """
+    target = scope or page
+
+    def _verify(sel_handle):
+        try:
+            actual = sel_handle.input_value() if hasattr(sel_handle, "input_value") else ""
+            return actual == value
+        except Exception:
+            return True  # if we can't verify, assume ok
+
     for sel in _as_list(selectors):
         try:
-            page.fill(sel, value, timeout=timeout)
-            return sel
+            if hasattr(target, "fill"):
+                target.fill(sel, value, timeout=timeout)
+                # Verify
+                try:
+                    actual = target.locator(sel).first.input_value()
+                    if actual != value:
+                        continue
+                except Exception:
+                    pass
+                return sel
         except Exception:
             continue
+
+    # Label-based fallback (very reliable for human-built forms)
+    if label_hint:
+        try:
+            loc = target.get_by_label(label_hint, exact=False) if hasattr(target, "get_by_label") else None
+            if loc is not None and loc.count() > 0:
+                loc.first.fill(value, timeout=timeout)
+                try:
+                    if loc.first.input_value() == value:
+                        return f"get_by_label:{label_hint}"
+                except Exception:
+                    return f"get_by_label:{label_hint}"
+        except Exception:
+            pass
+
+    # Placeholder-based fallback
+    if placeholder_hint:
+        try:
+            loc = target.get_by_placeholder(placeholder_hint, exact=False) if hasattr(target, "get_by_placeholder") else None
+            if loc is not None and loc.count() > 0:
+                loc.first.fill(value, timeout=timeout)
+                return f"get_by_placeholder:{placeholder_hint}"
+        except Exception:
+            pass
+
     return None
 
 
-def _try_click(page, selectors, timeout: int = 6000) -> Optional[str]:
+def _try_click(
+    page, selectors, timeout: int = 6000,
+    role_hint: Optional[str] = None,
+    text_hint: Optional[str] = None,
+    scope=None,
+) -> Optional[str]:
+    target = scope or page
+
     for sel in _as_list(selectors):
         try:
-            page.click(sel, timeout=timeout)
+            target.click(sel, timeout=timeout)
             return sel
         except Exception:
             continue
+
+    # Role-based fallback (best for buttons / links)
+    if role_hint and text_hint:
+        try:
+            loc = target.get_by_role(role_hint, name=text_hint) if hasattr(target, "get_by_role") else None
+            if loc is not None and loc.count() > 0:
+                loc.first.click(timeout=timeout)
+                return f"role:{role_hint}/{text_hint}"
+        except Exception:
+            pass
+    return None
+
+
+def _find_form_with_label(page, label_text: str):
+    """Return the <form> element that contains a label matching label_text.
+
+    Used to scope subsequent fill/click operations to the correct form when
+    the page has multiple forms (e.g. TREC has Site Search + License Search
+    + Topic Search on the same page)."""
+    try:
+        forms = page.query_selector_all("form")
+    except Exception:
+        return None
+    for form in forms:
+        try:
+            labels = form.query_selector_all("label")
+        except Exception:
+            continue
+        for label in labels:
+            try:
+                if label_text.lower() in ((label.inner_text() or "").lower()):
+                    return form
+            except Exception:
+                continue
     return None
 
 
@@ -368,8 +465,30 @@ def _dre_lookup_impl(
             result["recaptcha_detected"] = True
             steps.append({"step": "recaptcha_detected", "note": "reCAPTCHA widget present on page"})
 
+        # ── Scope to the correct <form> when the page has several ──────
+        # Pages like TREC have Site Search + License Holder Search + Topic
+        # Search on one page. We MUST type into the License Holder Search.
+        label_hint = selectors.get("license_input_label")
+        form_scope = None
+        if label_hint:
+            form_scope = _find_form_with_label(page, label_hint)
+            if form_scope:
+                steps.append({"step": "form_scope", "ok": True, "label": label_hint})
+
         # 1) Fill license number (visible in subsequent screenshot)
-        used_sel = _try_fill(page, selectors.get("license_input"), license_no)
+        used_sel = _try_fill(
+            page, selectors.get("license_input"), license_no,
+            label_hint=label_hint,
+            placeholder_hint=selectors.get("license_input_placeholder"),
+            scope=form_scope,
+        )
+        # If form-scoped fill failed, try page-wide as a last resort
+        if not used_sel and form_scope is not None:
+            used_sel = _try_fill(
+                page, selectors.get("license_input"), license_no,
+                label_hint=label_hint,
+                placeholder_hint=selectors.get("license_input_placeholder"),
+            )
         if not used_sel:
             steps.append({"step": "fill_license", "ok": False, "error": "no selector matched"})
             result["error"] = "could_not_locate_license_input"
@@ -378,8 +497,19 @@ def _dre_lookup_impl(
         steps.append({"step": "fill_license", "ok": True, "value": license_no, "selector": used_sel})
         result["screenshots"].append(_shot(page, "dre-02-filled"))
 
-        # 2) Submit
-        clicked = _try_click(page, selectors.get("submit_button"))
+        # 2) Submit (scoped to the same form so we don't trigger Site Search)
+        clicked = _try_click(
+            page, selectors.get("submit_button"),
+            role_hint="button",
+            text_hint=selectors.get("submit_button_text", "Search"),
+            scope=form_scope,
+        )
+        if not clicked and form_scope is not None:
+            clicked = _try_click(
+                page, selectors.get("submit_button"),
+                role_hint="button",
+                text_hint=selectors.get("submit_button_text", "Search"),
+            )
         if not clicked:
             page.keyboard.press("Enter")
             steps.append({"step": "submit", "ok": True, "via": "Enter key"})

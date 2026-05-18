@@ -39,11 +39,20 @@ dre:
   flow: multi_page_detail
 
   selectors:
+    # Label hint is the most reliable way to find the right input on a
+    # multi-form page (TREC has Site Search, License Search, Topic Search
+    # all on the same DOM). The runner uses page.get_by_label() as a
+    # fallback when the CSS selectors below don't match.
+    license_input_label: "Name or License Number"
+    license_input_placeholder: "License Number"
     license_input:
+      - "input#lic_name"
       - "input[name='lic_name']"
       - "input[name='Name']"
-      - "input[type='text']:visible"
 
+    # The runner scopes Search click to the form containing the
+    # license_input_label, so this matches the right Search (not Site Search).
+    submit_button_text: "Search"
     submit_button:
       - "input[name='license_search']"
       - "input[type='submit'][value*='Search' i]"

@@ -51,6 +51,11 @@ dre:
       - "select[name*='profession' i]"
       - "lightning-combobox[data-label*='Profession' i]"
 
+    # Label hint for label-based locator fallback (WA DOL labels their
+    # input "License Number")
+    license_input_label: "License Number"
+    license_input_placeholder: "License Number"
+
     # Step 3: the license number text input (multi-fallback because SF Lightning)
     license_input:
       - "input[name='License_Number']"
@@ -66,7 +71,8 @@ dre:
       - "iframe[src*='recaptcha']"
       - "iframe[title*='reCAPTCHA' i]"
 
-    # Step 5: submit button
+    # Step 5: submit button (scoped to the License Lookup form)
+    submit_button_text: "Search"
     submit_button:
       - "button:has-text('Search')"
       - "lightning-button[label='Search'] button"
