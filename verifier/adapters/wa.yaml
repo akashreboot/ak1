@@ -1,0 +1,57 @@
+# Washington DOL Business & Professional Licensing — REAL site.
+# https://professions.dol.wa.gov/s/license-lookup
+#
+# This is a SALESFORCE LIGHTNING SPA (/s/ route). It uses Shadow DOM in some
+# components, async loading, and aggressive bot detection. Default tier: T2
+# (Camoufox with stealth fingerprinting). The router will auto-fallback to
+# plain Playwright if Camoufox isn't installed and narrate the substitution.
+#
+# Disambiguation IS REQUIRED — same license # can return multiple rows
+# (e.g. Notary + Real Estate Broker), as demonstrated in the case study screenshots.
+
+state_code: WA
+state_full_name: Washington
+version: v1
+last_updated: 2026-05-18
+maturity: ai_primitives
+anti_bot_tier: T2                        # Salesforce Lightning + bot detection
+
+profile_source:
+  joinreal_url_pattern: "https://onereal.com/profile/{slug}"
+  joinreal_url_fallbacks:
+    - "https://onereal.com/{slug}"
+    - "https://onereal.com/{slug}/about"
+
+dre:
+  search_url: "https://professions.dol.wa.gov/s/license-lookup"
+  search_method: license_number
+  expected_license_types:
+    - "Real Estate Broker"
+    - "Real Estate Managing Broker"
+  disambiguation_required: true          # same license # may belong to multiple records
+
+  selectors:
+    # Salesforce Lightning component selectors — these tend to be slot-based.
+    license_input: "input[name='LicenseNumber'], input[placeholder*='License Number'], input[aria-label*='License']"
+    submit_button: "button:has-text('Search'), button[type='submit']"
+    result_rows: "table tr, lightning-formatted-text"
+    result_columns:
+      name: "[data-label='Name'], td:nth-child(1)"
+      license_number: "[data-label='License'], td:nth-child(2)"
+      license_type: "[data-label='License Type'], td:nth-child(3)"
+      status: "[data-label='Status'], td:nth-child(4)"
+      city: "[data-label='City'], td:nth-child(7)"
+    no_results_marker: "text=/no results|no records found/i"
+
+  ai_fallback_descriptions:
+    license_input: "the License Number input field on the Salesforce search page"
+    submit_button: "the Search button"
+    result_table:  "the table of search results with columns: Name, License, License Type, Status, City"
+    expiration_field: "the expiration date for the selected row"
+
+retry_policy:
+  max_attempts: 3
+  initial_backoff_ms: 2000              # SF Lightning is slower; bigger backoff
+  multiplier: 2.0
+
+concurrency_cap: 5                       # cautious on SF rate limits

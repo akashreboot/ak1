@@ -1,25 +1,52 @@
-# Texas DRE adapter (Texas Real Estate Commission - TREC).
-# Local Flask mock at port 8803.
+# Texas TREC adapter — REAL site.
+# https://www.trec.texas.gov/license-search/
+#
+# Accepts name or license number. Returns multiple rows (different license
+# types per holder). Disambiguation by license type + status REQUIRED.
 
-state: TX
+state_code: TX
+state_full_name: Texas
 version: v1
-last_updated: 2026-05-17
+last_updated: 2026-05-18
 maturity: native_adapter
-search_url: http://127.0.0.1:8803/Public/LicenseeNameSearch.aspx
-search_path: /Public/LicenseeNameSearch.aspx
+anti_bot_tier: T1                        # mostly works; some TREC subpages have edge cases
 
-selectors:
-  license_input: "#licNumber"
-  submit_button: "button[type='submit']"
-  expiration_field: "[data-field='expiration']"
-  agent_name_field: "[data-field='name']"
-  no_results_marker: "[data-no-results]"
+profile_source:
+  joinreal_url_pattern: "https://onereal.com/profile/{slug}"
+  joinreal_url_fallbacks:
+    - "https://onereal.com/{slug}"
+    - "https://onereal.com/{slug}/about"
 
-ai_fallback_descriptions:
-  license_input: "the License Number input field"
-  submit_button: "the Search button"
-  expiration_field: "the expiration date field on the licensee detail page"
-  agent_name_field: "the licensee name field on the detail page"
+dre:
+  search_url: "https://www.trec.texas.gov/license-search/"
+  search_method: name_or_license_number   # both accepted
+  expected_license_types:
+    - "Sales Agent"
+    - "Broker"
+    - "Real Estate Broker"
+    - "Real Estate Sales Agent"
+  disambiguation_required: true
+
+  selectors:
+    name_input: "input[name='lic_name']"
+    license_input: "input[name='lic_hp']"
+    industry_select: "select[name='industry']"
+    submit_button: "input[name='license_search'], button[type='submit']"
+    result_rows: "table tbody tr"
+    result_columns:
+      name: "td:nth-child(1)"
+      license_number: "td:nth-child(2)"
+      license_type: "td:nth-child(3)"
+      status: "td:nth-child(4)"
+      expiration: "td:nth-child(5)"
+      city: "td:nth-child(6)"
+    no_results_marker: "text=/No license holder found|no records/i"
+
+  ai_fallback_descriptions:
+    license_input: "the License Number input field on the search form"
+    name_input: "the Name input field (Last, First format)"
+    submit_button: "the Search button"
+    expiration_field: "the expiration date value for the matching row"
 
 retry_policy:
   max_attempts: 3

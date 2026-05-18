@@ -1,31 +1,44 @@
-# California DRE adapter — versioned configuration.
+# California DRE adapter — REAL site.
+# https://www2.dre.ca.gov/publicasp/pplinfo.asp
 #
-# In production this YAML lives in S3, is registered in Postgres with a
-# feature flag, canaries to 5% of CA traffic, auto-promotes on success-rate
-# metrics. A bug in the field gets fixed by editing YAML — NO code release.
-#
-# For the live demo the search_url points at our local Flask mock by default.
-# Set REAL_DRE_BASE_CA=https://www2.dre.ca.gov to hit the real site.
+# Classic ASP page. Accepts License ID, Licensee Name (last, first), or Company name.
+# Disambiguation: license # is mostly unique on CA DRE, but some result pages can
+# show multiple licenses for an entity. We still verify name + status to be safe.
 
-state: CA
+state_code: CA
+state_full_name: California
 version: v1
-last_updated: 2026-05-17
+last_updated: 2026-05-18
 maturity: native_adapter
-search_url: http://127.0.0.1:8802/PublicASP/pplinfo.asp
-search_path: /PublicASP/pplinfo.asp
+anti_bot_tier: T1                        # plain Playwright works against pplinfo.asp
 
-selectors:
-  license_input: "#sel_LicID"
-  submit_button: "button[type='submit']"
-  expiration_field: "[data-field='expiration']"
-  agent_name_field: "[data-field='name']"
-  no_results_marker: "[data-no-results]"
+profile_source:
+  joinreal_url_pattern: "https://onereal.com/profile/{slug}"
+  joinreal_url_fallbacks:
+    - "https://onereal.com/{slug}"
+    - "https://onereal.com/{slug}/about"
 
-ai_fallback_descriptions:
-  license_input: "the License ID input field on the search form"
-  submit_button: "the Find button on the search form"
-  expiration_field: "the License Expiration Date value on the agent's listing page"
-  agent_name_field: "the Licensee Name field on the agent's listing page"
+dre:
+  search_url: "https://www2.dre.ca.gov/publicasp/pplinfo.asp?start=1"
+  search_method: license_number
+  expected_license_types:
+    - "Real Estate Salesperson"
+    - "Real Estate Broker"
+  disambiguation_required: false        # CA DRE returns a single record per license #
+
+  selectors:
+    license_input: "input[name='License_id']"
+    submit_button: "input[type='submit'][value*='Find']"
+    result_table: "table"
+    expiration_field_label: "License Expiration Date"
+    agent_name_label: "Licensee Name"
+    no_results_marker: "text=/No record found|no results/i"
+
+  ai_fallback_descriptions:
+    license_input: "the License Identification Number input on the search form"
+    submit_button: "the Find button on the search form"
+    expiration_field: "the License Expiration Date value on the licensee detail page"
+    agent_name_field: "the Licensee Name value on the licensee detail page"
 
 retry_policy:
   max_attempts: 3

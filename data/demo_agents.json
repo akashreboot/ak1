@@ -1,0 +1,62 @@
+{
+  "_comment": "Demo agents: real onereal.com profiles + real state DRE URLs. Edit slugs/states here to swap demo targets without code changes.",
+  "agents": [
+    {
+      "demo_id": "demo-WA-1",
+      "demo_label": "WA · James Nam · happy path",
+      "agent_id": "A-WA-141102",
+      "name": { "full": "James Nam", "first": "James", "last": "Nam" },
+      "slug": "james-nam",
+      "profile_url": "https://onereal.com/profile/james-nam",
+      "fallback_profile_urls": [
+        "https://onereal.com/james-nam",
+        "https://onereal.com/james-nam/about"
+      ],
+      "expected": {
+        "state_code": "WA",
+        "state_full_name": "Washington",
+        "license_number_hint": "141102",
+        "license_type": "Real Estate Broker"
+      },
+      "scenario": "happy_path"
+    },
+    {
+      "demo_id": "demo-CA-1",
+      "demo_label": "CA · Chris Porter",
+      "agent_id": "A-CA-CP01",
+      "name": { "full": "Chris Porter", "first": "Chris", "last": "Porter" },
+      "slug": "chris-porter",
+      "profile_url": "https://onereal.com/profile/chris-porter",
+      "fallback_profile_urls": [
+        "https://onereal.com/chris-porter",
+        "https://onereal.com/chris-porter/about"
+      ],
+      "expected": {
+        "state_code": "CA",
+        "state_full_name": "California",
+        "license_number_hint": "02145099",
+        "license_type": "Real Estate Salesperson"
+      },
+      "scenario": "happy_path"
+    },
+    {
+      "demo_id": "demo-TX-1",
+      "demo_label": "TX · Khary Livingston · disambiguation",
+      "agent_id": "A-TX-KL01",
+      "name": { "full": "Khary Livingston", "first": "Khary", "last": "Livingston" },
+      "slug": "khary-livingston",
+      "profile_url": "https://onereal.com/profile/khary-livingston",
+      "fallback_profile_urls": [
+        "https://onereal.com/khary-livingston",
+        "https://onereal.com/khary-livingston/about"
+      ],
+      "expected": {
+        "state_code": "TX",
+        "state_full_name": "Texas",
+        "license_number_hint": "0712334",
+        "license_type": "Sales Agent"
+      },
+      "scenario": "disambiguation"
+    }
+  ]
+}

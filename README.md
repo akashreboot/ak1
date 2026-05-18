@@ -1,110 +1,139 @@
-# Real · Agent Verification System — Presentation + Working Build
+# Real · Agent Verification System — Presentation + Working Build (v2)
 
-An interactive Streamlit deck **and** a working implementation of the proposed durable, AI-augmented agent verification system. Built for the panel with **Mark Hinojosa** (Manager, Engineering — AI & Automation @ Real).
+An interactive Streamlit deck **and** a working implementation. The deck (9 pages) proposes the architecture; the working build (5 more pages) lets you watch it run end-to-end against **real `onereal.com` profiles and real state DRE sites**.
 
-The deck (9 pages) proposes the architecture. The working build (4 more pages) lets you **watch it run** end-to-end: real Playwright Chromium, real Claude API (when key is set), real SQLite ledger, real HITL queue.
+Built for the panel with **Mark Hinojosa** (Manager, Engineering — AI & Automation @ Real).
 
-## Quick start
+## Quick start (Windows / PowerShell)
 
 ```powershell
-# Windows / PowerShell
 pip install -r requirements.txt
-playwright install chromium           # ~200MB one-time download
-$env:ANTHROPIC_API_KEY = "sk-ant-..."  # optional — enables real Claude calls
+python -m playwright install chromium       # ~200MB one-time
+python -m camoufox fetch                    # ~200MB one-time (optional — T2 stealth)
+$env:ANTHROPIC_API_KEY = "sk-ant-..."       # enables real Claude calls
 python -m streamlit run app.py
 ```
 
 Open http://localhost:8501.
 
-> If `streamlit` isn't on PATH, use `python -m streamlit run app.py`.
+> No Anthropic key? The system runs with a deterministic LLM mock.
+> No Camoufox? The T2 path transparently falls back to plain Playwright (narrated in the trace).
 
-## Demo flow (~3 minutes)
+## Demo day flow (~5 min)
 
-1. Open the **Live Demo** page (sidebar)
-2. Pick scenario: **Jordan Rivera (CA · happy path)**
-3. Toggle **Show Chromium window** = on
-4. Click **▶ Run verification**
-5. A real Chromium window pops up, drives the local JoinReal + CA DRE mocks
-6. Live trace streams in Streamlit, ledger row lands
-7. Open **Verification Ledger** — there's the row, with the captured screenshot
-8. Back to **Live Demo** — pick **Maria Delgado (TX · mismatch)** → run
-9. Workflow ends in quarantine
-10. Open **HITL Queue** — Slack-styled alert appears with working buttons
-11. Click **Approve CRM value** → ledger row updates, case resolved
-12. Open **Metrics Dashboard** — live counts from the SQLite ledger
+1. **Live Demo** → pick **WA · James Nam** → ▶ Run. A real Chromium window opens, drives the live profile + WA DOL Salesforce Lightning lookup. License #141102 returns two rows (Krista Cooper · Notary + James Bond NAM · Real Estate Broker); the disambiguator picks the right one. Ledger row lands.
+2. Pick **CA · Chris Porter** → ▶ Run. T1 path. Fast happy match.
+3. Pick **TX · Khary Livingston** → ▶ Run. T1 + disambiguation required.
+4. **Newly Joined** → see all 20 newly-active agents in the queue → "Run all" for a batch sweep.
+5. **Verification Ledger** → real SQLite rows, each with the captured screenshot.
+6. **HITL Queue** → if any quarantined, Slack-styled alerts with working Approve/Reject buttons.
+7. **Metrics Dashboard** → live numbers from the real ledger.
+8. **Adapter Registry** → all 3 state YAMLs, their declared tier, the router's effective tier, recent success/failure history.
 
-## What's REAL vs what's a production stand-in
+## Demo-day safety nets
 
-| Architecture slide says | What runs in this build |
+| Safety net | Purpose |
 |---|---|
-| Temporal.io | Generator-based saga engine in `verifier/workflow.py` — same retry / replay / signal semantics |
-| Playwright + Stagehand + Browserbase | Real Playwright Chromium against local Flask mocks of JoinReal + 3 state DREs |
-| Claude Opus vision + Haiku classifier | Real Anthropic SDK calls (if `ANTHROPIC_API_KEY` is set), deterministic mock otherwise |
-| Postgres ledger | SQLite at `data/ledger.db` (same SQL semantics) |
-| Redis selector cache | In-memory dict with TTL in `verifier/cache.py` |
-| EventBridge + DynamoDB outbox | Streamlit button + in-process queue |
-| Slack HITL alerts | Slack-styled alert rendered in the HITL Queue page with real working buttons |
-| Datadog | Live Metrics Dashboard page reading from SQLite |
-| S3 artifact storage | Local `data/screenshots/` directory |
+| **Practice mode toggle** (top of Live Demo) | Zero network. Synthesizes profile + DRE from CRM data. Demo never fails. |
+| **Cached profile snapshots** | First successful live fetch caches the parsed profile to `data/cache/profiles/`. Subsequent runs survive a network blip. |
+| **Per-step timeouts + retries** | Every Playwright nav has a 15s timeout. Activities retry 3x with exponential backoff. |
+| **Graceful synthesis** | If profile or DRE fetch ultimately fails, the workflow falls back to CRM data and writes a synthesized result — clearly labeled in the trace. |
+
+## V2 architecture (what changed from V1)
+
+V1 used local Flask mocks for JoinReal + DRE. V2 hits **real `onereal.com` profile pages** and **real state DRE sites**. The new pipeline:
+
+```
+1 · CRM event (active flag flip)
+2 · Profile resolve   — fetch onereal.com/profile/<slug> via Playwright
+3 · Cross-check       — name + state agreement, name-similarity scoring
+4 · Adapter resolve   — load per-state YAML, anti-bot router picks T1/T2/T3/T4
+5 · DRE verify        — Playwright (T1) or Camoufox (T2) drives the state site;
+                        disambiguation by license_type + status + name + city
+6 · Decide            — Claude Haiku compares CRM vs DRE expiration → ledger
+```
+
+### Anti-bot router (4 tiers)
+
+| Tier | Tool | Used for | This demo |
+|---|---|---|---|
+| **T1** | Playwright | Sites without anti-bot (~70% of states) | **Real** |
+| **T2** | Camoufox (Firefox + C++ stealth, 0% headless detection) | Cloudflare-light sites (~20%) | **Real if installed, falls back to T1 otherwise** |
+| **T3** | Browserbase / Bright Data managed browsers | Hard Cloudflare + CAPTCHA (~9%) | Simulated (narrated in trace) |
+| **T4** | HITL with operator-solved challenge | Sites that resist everything (~1%) | Routes to HITL Queue page |
+
+Router auto-promotes a state's tier after 3 consecutive failures, auto-demotes after 3 successes. Visible on **Adapter Registry** page.
+
+### What's REAL vs production stand-ins
+
+| Architecture says | This build runs |
+|---|---|
+| Temporal.io | Generator-based saga engine — same retry / replay / signal semantics |
+| Playwright + Stagehand + Browserbase | Real Playwright + Camoufox; Browserbase narrated |
+| Claude Opus vision + Haiku classifier | Real Anthropic SDK calls (or deterministic mock) |
+| Postgres ledger | SQLite at `data/ledger.db` |
+| Redis selector cache | In-memory dict with TTL |
+| EventBridge + DynamoDB outbox | Streamlit button + `agents.json` |
+| Slack HITL alerts | In-page Slack-styled alerts with real working buttons |
+| Datadog | Metrics Dashboard reading from SQLite |
+| S3 artifacts | `data/screenshots/` |
 
 ## Pages
 
 | # | Page | Purpose |
 |---|---|---|
 | Home | `app.py` | Hero + nav |
-| 1 | Problem Statement | The brief, 11 events, assumptions |
-| 2 | System Architecture | Six layers, system diagram |
-| 3 | Workflow Walkthrough | Animated trace |
-| 4 | Tech Stack | Every pick + rejected alternatives + cost |
-| 5 | Resilience | Failure handling, Mark's 3 questions |
-| 6 | Deployment | Topology, SLOs, security |
-| 7 | Knowledge Guide | Plain-English tool glossary |
-| 8 | Panel Q&A | 20 anticipated questions |
-| 9 | Presentation Script | Minute-by-minute talk track |
-| **10** | **Live Demo** | **Run the real workflow against the mock sites** |
-| **11** | **Verification Ledger** | **Browse real SQLite ledger** |
-| **12** | **HITL Queue** | **Resolve cases via working Slack-style buttons** |
-| **13** | **Metrics Dashboard** | **Live metrics from real ledger** |
-
-## Three sentences to memorize
-
-1. *"It has to be cheap when nothing's wrong, and graceful when something is."*
-2. *"Six layers, one durable workflow."*
-3. *"AI is a fallback, not the headline."*
+| 1–9 | Deck | Architecture, tradeoffs, deployment, panel Q&A, talk track |
+| **10** | **Live Demo** | **Pick 1 of 3 real-URL scenarios, run end-to-end** |
+| **11** | **Verification Ledger** | **Browse real SQLite ledger with screenshots** |
+| **12** | **HITL Queue** | **Slack-styled alerts + real working buttons** |
+| **13** | **Metrics Dashboard** | **Live charts from real ledger** |
+| **14** | **Newly Joined** | **20-agent trigger feed; batch run** |
+| **15** | **Adapter Registry** | **All state YAMLs + auto-router health** |
 
 ## File layout
 
 ```
 ak1/
 ├── app.py                          # Home / hero
-├── components/                     # Shared CSS + Graphviz/Plotly diagram helpers
-├── pages/                          # 13 Streamlit pages (9 deck + 4 working build)
-├── verifier/                       # The working implementation
-│   ├── workflow.py                 # Saga engine (Temporal stand-in)
-│   ├── activities.py               # The 6 activities the workflow orchestrates
-│   ├── playwright_runner.py        # Real Chromium automation
-│   ├── llm_claude.py               # Anthropic SDK wrapper (with mock fallback)
-│   ├── adapter_loader.py           # YAML per-state DRE adapter loader
-│   ├── adapters/                   # ca.yaml, tx.yaml, hi.yaml — versioned configs
-│   ├── cache.py                    # In-memory selector cache (Stagehand pattern)
+├── components/                     # Shared CSS + diagram helpers
+├── pages/                          # 15 Streamlit pages (9 deck + 6 working build)
+├── verifier/
+│   ├── workflow.py                 # Saga engine
+│   ├── activities.py               # 6-stage pipeline
+│   ├── agent_loader.py             # Load + filter agents from JSON
+│   ├── agent_generator.py          # Generate 100-agent fixture
+│   ├── profile_fetcher.py          # Real onereal.com profile parser
+│   ├── adapter_loader.py           # Per-state YAML loader
+│   ├── disambiguator.py            # Multi-field confidence scoring
+│   ├── anti_bot_router.py          # T1-T4 tier routing + auto-promote
+│   ├── playwright_runner.py        # Real Chromium (T1)
+│   ├── runners/camoufox_runner.py  # Real Firefox + stealth (T2)
+│   ├── llm_claude.py               # Anthropic SDK wrapper
 │   ├── db.py                       # SQLite ledger + HITL queue
-│   ├── fixtures.py                 # 3 sample agents (happy / mismatch / HITL)
-│   ├── mock_sites/                 # Flask mocks of JoinReal + DREs
-│   └── trace.py                    # Span emission
-├── data/                           # Runtime data (gitignored): ledger.db + screenshots/
+│   ├── trace.py                    # Span emission
+│   ├── cache.py                    # Selector cache
+│   └── adapters/{ca,tx,wa}.yaml    # Per-state DRE configs
+├── data/
+│   ├── demo_agents.json            # 3 real-URL demo targets (editable)
+│   ├── agents.json                 # 100 generated agents (regenerable)
+│   ├── ledger.db                   # Runtime SQLite (gitignored)
+│   ├── screenshots/                # Runtime artifacts (gitignored)
+│   └── cache/profiles/             # Cached onereal profiles (gitignored)
 └── requirements.txt
 ```
+
+## Three sentences to memorize for the panel
+
+1. *"It has to be cheap when nothing's wrong, and graceful when something is."*
+2. *"Adapter-as-data, not adapter-as-code."*
+3. *"AI is a fallback, not the headline."*
 
 ## Optional configuration
 
 ```powershell
-# Use real Claude for extraction + classification
-$env:ANTHROPIC_API_KEY = "sk-ant-..."
-
-# Pin specific Claude model IDs (defaults shown)
-$env:CLAUDE_MODEL_HEAVY = "claude-opus-4-7"
-$env:CLAUDE_MODEL_LIGHT = "claude-haiku-4-5-20251001"
-
-# Point an adapter at a real DRE site instead of the local mock
-$env:REAL_DRE_BASE_CA = "https://www2.dre.ca.gov"
+$env:ANTHROPIC_API_KEY    = "sk-ant-..."              # real Claude
+$env:CLAUDE_MODEL_HEAVY   = "claude-opus-4-7"
+$env:CLAUDE_MODEL_LIGHT   = "claude-haiku-4-5-20251001"
+$env:REAL_DRE_BASE_CA     = "https://www2.dre.ca.gov" # override per state if needed
 ```

@@ -8,3 +8,6 @@ flask>=3.0.0
 pyyaml>=6.0.1
 playwright>=1.49.0
 anthropic>=0.40.0
+
+# T2 stealth runner (optional — falls back to plain Playwright if missing)
+camoufox>=0.4.0
