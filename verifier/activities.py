@@ -10,6 +10,7 @@ V2 pipeline (matches the 6-stage architecture):
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import Optional
 
@@ -130,14 +131,32 @@ def cross_check_profile(ctx: TraceContext) -> dict:
 # ── 4. Resolve adapter + pick browser tier ────────────────────────────────
 
 def resolve_adapter(ctx: TraceContext) -> dict:
-    state = ctx.crm["license"]["state_code"]
+    """Pick the DRE adapter from the *profile's* state (the agent's published truth),
+    falling back to the CRM's state if the profile didn't expose one.
+
+    This is what makes the demo agent-driven: change the agent's state on
+    onereal.com and the system automatically routes to a different DRE."""
+    crm_state = ctx.crm["license"]["state_code"]
+    profile_state = (ctx.onereal or {}).get("state_code")
+    state = profile_state or crm_state
+    state_source = "onereal_profile" if profile_state else "crm_fallback"
+
     adapter = load_adapter(state)
     declared_tier = adapter.get("anti_bot_tier", TIER_NATIVE)
     effective_tier = ROUTER.get_tier(state, declared_tier)
     runner_name, _ = runner_for_tier(effective_tier)
 
+    # Also stash the chosen state so dre_verify uses it (not CRM state)
+    ctx.results["__chosen_state__"] = state
+    ctx.results["__chosen_dre_url__"] = adapter["dre"]["search_url"]
+
     return {
         "state_code": state,
+        "state_source": state_source,
+        "crm_state": crm_state,
+        "profile_state": profile_state,
+        "state_match": (profile_state is None or profile_state == crm_state),
+        "dre_url": adapter["dre"]["search_url"],
         "adapter_version": adapter.get("version", "v?"),
         "declared_tier": declared_tier,
         "effective_tier": effective_tier,
@@ -150,7 +169,8 @@ def resolve_adapter(ctx: TraceContext) -> dict:
 # ── 5. DRE verify ─────────────────────────────────────────────────────────
 
 def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
-    state = ctx.crm["license"]["state_code"]
+    # Use the state CHOSEN by resolve_adapter (profile-driven), not the raw CRM state.
+    state = ctx.results.get("__chosen_state__") or ctx.crm["license"]["state_code"]
     adapter = load_adapter(state)
     effective_tier = ctx.results.get("activity:Resolve adapter & pick browser tier", {}).get("effective_tier", TIER_NATIVE)
 
@@ -296,7 +316,7 @@ def compare_and_decide(ctx: TraceContext) -> dict:
 # ── Sinks: write ledger / open HITL ───────────────────────────────────────
 
 def write_match(ctx: TraceContext) -> dict:
-    artifact = ctx.artifacts[-1] if ctx.artifacts else None
+    artifact = json.dumps(ctx.artifacts) if ctx.artifacts else None
     vid = db.insert_verification(
         run_id=ctx.run_id,
         agent_id=ctx.agent["agent_id"],
@@ -319,7 +339,7 @@ def write_match(ctx: TraceContext) -> dict:
 
 
 def quarantine_mismatch(ctx: TraceContext, reason: str) -> dict:
-    artifact = ctx.artifacts[-1] if ctx.artifacts else None
+    artifact = json.dumps(ctx.artifacts) if ctx.artifacts else None
     vid = db.insert_verification(
         run_id=ctx.run_id,
         agent_id=ctx.agent["agent_id"],
@@ -353,7 +373,7 @@ def quarantine_mismatch(ctx: TraceContext, reason: str) -> dict:
 
 
 def quarantine_captcha(ctx: TraceContext, reason: str, scraped: dict) -> dict:
-    artifact = ctx.artifacts[-1] if ctx.artifacts else None
+    artifact = json.dumps(ctx.artifacts) if ctx.artifacts else None
     vid = db.insert_verification(
         run_id=ctx.run_id,
         agent_id=ctx.agent["agent_id"],

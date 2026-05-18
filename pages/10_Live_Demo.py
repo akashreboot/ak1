@@ -280,12 +280,29 @@ if run_clicked:
         else:
             status_placeholder.error(f"✗ {v['result']} · row #{v['id']}")
 
-        if v.get("artifact_path"):
-            apath = Path(__file__).resolve().parent.parent / v["artifact_path"]
-            if apath.exists():
-                with artifact_placeholder.container():
-                    st.markdown("##### Last artifact (Playwright screenshot)")
-                    st.image(str(apath), use_container_width=True)
+        # Parse all artifacts (profile screenshot + DRE screenshots)
+        raw = v.get("artifact_path") or ""
+        artifacts = []
+        if raw:
+            s = str(raw).strip()
+            if s.startswith("["):
+                try:
+                    import json as _json
+                    artifacts = _json.loads(s)
+                except Exception:
+                    artifacts = [s]
+            else:
+                artifacts = [s]
+        project_root = Path(__file__).resolve().parent.parent
+        if artifacts:
+            with artifact_placeholder.container():
+                st.markdown(f"##### Artifacts captured · {len(artifacts)} screenshot(s)")
+                cols = st.columns(min(len(artifacts), 3))
+                for i, p in enumerate(artifacts):
+                    apath = project_root / p
+                    if apath.exists():
+                        label = Path(p).stem.replace("-", " ").replace("_", " ").title()
+                        cols[i % 3].image(str(apath), caption=label, use_container_width=True)
 
 divider()
 

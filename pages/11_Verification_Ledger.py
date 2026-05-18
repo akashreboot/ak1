@@ -88,17 +88,35 @@ with cols[0]:
     st.markdown(f"##### Row #{row['id']} · {row['agent_name']}  ({row['agent_id']})")
     st.json({k: v for k, v in row.items() if v not in (None, "")})
 
+def _parse_artifacts(val):
+    """Backward-compat: artifact_path may be a single path string OR a JSON array."""
+    if not val:
+        return []
+    if isinstance(val, list):
+        return val
+    s = str(val).strip()
+    if s.startswith("["):
+        try:
+            return json.loads(s)
+        except json.JSONDecodeError:
+            return [s]
+    return [s]
+
+
 with cols[1]:
-    artifact = row.get("artifact_path")
-    if artifact:
-        apath = Path(__file__).resolve().parent.parent / artifact
-        if apath.exists():
-            st.markdown("##### Captured artifact")
-            st.image(str(apath), use_container_width=True)
-        else:
-            st.info(f"Artifact path recorded but file missing: `{artifact}`")
+    artifacts = _parse_artifacts(row.get("artifact_path"))
+    if artifacts:
+        st.markdown(f"##### Captured artifacts · {len(artifacts)} screenshot(s)")
+        project_root = Path(__file__).resolve().parent.parent
+        for p in artifacts:
+            apath = project_root / p
+            if apath.exists():
+                label = Path(p).stem.replace("-", " ").title()
+                st.image(str(apath), caption=label, use_container_width=True)
+            else:
+                st.caption(f"⚠ missing: `{p}`")
     else:
-        st.info("No artifact captured for this row (likely an offline-mode run).")
+        st.info("No artifacts captured for this row (likely an offline-mode run).")
 
     # Show the matching trace
     traces = db.fetch_traces(row["run_id"])

@@ -165,6 +165,15 @@ def run_verification(
             activities.resolve_adapter,
         )
 
+        # Narrate which state was chosen for the DRE lookup (profile-driven)
+        state_msg = (
+            f"📍 DRE chosen from {adapter_info['state_source']}: "
+            f"{adapter_info['state_code']} · {adapter_info['dre_url']}"
+        )
+        if not adapter_info["state_match"] and adapter_info["profile_state"]:
+            state_msg += f"  ⚠ CRM has {adapter_info['crm_state']}, profile has {adapter_info['profile_state']}"
+        yield ctx.span("activity", "Adapter", state_msg)
+
         # Narrate tier choice
         yield ctx.span(
             "activity", "Anti-bot router",
@@ -172,9 +181,10 @@ def run_verification(
             detail=f"runner={adapter_info['runner']}  adapter={adapter_info['state_code']}@{adapter_info['adapter_version']}  disambig={adapter_info['disambiguation_required']}",
         )
 
-        # 5) DRE verify (real Playwright / Camoufox)
+        # 5) DRE verify (real Playwright / Camoufox), using profile-chosen state
+        chosen_state = ctx.results.get("__chosen_state__") or agent["license"]["state_code"]
         ctx.dre = yield from activity(
-            ctx, f"Verify on {agent['license']['state_code']} DRE", "DRE",
+            ctx, f"Verify on {chosen_state} DRE", "DRE",
             activities.dre_verify, headed=headed_browser,
         )
 
