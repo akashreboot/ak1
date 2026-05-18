@@ -4,6 +4,11 @@ The browser is REAL Chromium (headed by default for the demo so the panel
 can watch the page get driven). When Playwright isn't installed we degrade
 to a deterministic offline mode that still produces a workable trace.
 
+Windows + Python 3.9 note: Streamlit installs a SelectorEventLoop on its
+script thread; Playwright needs to spawn Chromium via asyncio subprocess,
+which requires ProactorEventLoop on Windows. We isolate Playwright in a
+dedicated worker thread that owns its own ProactorEventLoop.
+
 Two flows are exposed:
   - join_real_lookup(...)       — search agent by name on local JoinReal mock
   - dre_lookup(...)             — fill license # on a state DRE mock,
@@ -11,11 +16,14 @@ Two flows are exposed:
 """
 from __future__ import annotations
 
+import asyncio
+import sys
+import threading
 import time
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Optional
+from typing import Any, Callable, Optional
 
 from verifier.cache import SELECTOR_CACHE
 
@@ -29,6 +37,44 @@ def playwright_available() -> bool:
         return True
     except Exception:
         return False
+
+
+# ── Isolated execution: Windows-safe event loop for Playwright ────────────
+
+def _run_playwright_isolated(fn: Callable, *args, **kwargs) -> Any:
+    """Run a Playwright sync_api call in a dedicated thread with its own loop.
+
+    Why: Streamlit's script thread on Windows has a SelectorEventLoop that
+    can't spawn subprocesses. Playwright spawns Chromium via asyncio.
+    Solution: dedicated thread, fresh ProactorEventLoop on Windows.
+    """
+    result: dict = {"value": None, "error": None}
+
+    def worker() -> None:
+        try:
+            if sys.platform == "win32":
+                # ProactorEventLoop is required for subprocess_exec on Windows.
+                loop = asyncio.ProactorEventLoop()  # type: ignore[attr-defined]
+            else:
+                loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result["value"] = fn(*args, **kwargs)
+            finally:
+                try:
+                    loop.close()
+                except Exception:
+                    pass
+        except Exception as e:  # noqa: BLE001
+            result["error"] = e
+
+    t = threading.Thread(target=worker, name="playwright-worker", daemon=False)
+    t.start()
+    t.join()
+
+    if result["error"] is not None:
+        raise result["error"]
+    return result["value"]
 
 
 # ── Real browser flows ────────────────────────────────────────────────────
@@ -61,12 +107,24 @@ def join_real_lookup(
     """Drive the JoinReal mock: search by name, click first match, extract state."""
     if not playwright_available():
         return _offline_joinreal(name)
+    try:
+        return _run_playwright_isolated(
+            _join_real_lookup_impl, name, base_url, headed, slow_mo_ms,
+        )
+    except Exception as e:  # noqa: BLE001
+        # Last-resort safety: fall back to offline so the workflow keeps moving.
+        print(f"[playwright_runner] join_real_lookup fell back to offline: {e}")
+        return _offline_joinreal(name)
 
+
+def _join_real_lookup_impl(
+    name: str, base_url: str, headed: bool, slow_mo_ms: int,
+) -> dict:
     result: dict = {"name": name, "found": False, "state": None, "screenshots": []}
 
     with _browser(headed=headed, slow_mo_ms=slow_mo_ms) as page:
         page.goto(f"{base_url}/directory", timeout=15000)
-        result["screenshots"].append(_shot(page, "joinreal-directory"))
+        result["screenshots"].append(_shot(page, "joinreal-directory"))  # noqa: F841
 
         # Try cached selector first (the Stagehand pattern)
         cached = SELECTOR_CACHE.get("joinreal:search-input")
@@ -107,7 +165,18 @@ def dre_lookup(
     """Drive a state DRE mock — fill license #, extract expiration."""
     if not playwright_available():
         return _offline_dre(license_no, base_url)
+    try:
+        return _run_playwright_isolated(
+            _dre_lookup_impl, license_no, base_url, selectors, headed, slow_mo_ms,
+        )
+    except Exception as e:  # noqa: BLE001
+        print(f"[playwright_runner] dre_lookup fell back to offline: {e}")
+        return _offline_dre(license_no, base_url)
 
+
+def _dre_lookup_impl(
+    license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
+) -> dict:
     result: dict = {
         "license_no": license_no, "found": False, "name": None,
         "expiration": None, "captcha": False, "html": None, "screenshots": [],
