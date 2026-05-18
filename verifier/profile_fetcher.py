@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Optional
 
 from verifier.playwright_runner import (
-    _run_playwright_isolated,
+    _run_in_subprocess,
     _browser,
     _shot,
     playwright_available,
@@ -88,18 +88,17 @@ def fetch_profile(
             return data
         return _err(primary_url, "playwright_not_installed")
 
-    try:
-        result = _run_playwright_isolated(
-            _fetch_profile_impl, candidates, headed, slow_mo_ms,
-        )
-    except Exception as e:  # noqa: BLE001
+    result = _run_in_subprocess("fetch_profile", {
+        "candidates": candidates, "headed": headed, "slow_mo_ms": slow_mo_ms,
+    }, timeout=60)
+    if result.get("ok") is False:
         # Fall back to cache if live fetch failed
         if cache_path.exists():
             data = json.loads(cache_path.read_text())
             data["cached"] = True
-            data["live_fetch_error"] = str(e)
+            data["live_fetch_error"] = result.get("error")
             return data
-        return _err(primary_url, f"fetch_failed: {e}")
+        return _err(primary_url, f"fetch_failed: {result.get('error')}")
 
     # Persist cache on success
     if result.get("ok"):

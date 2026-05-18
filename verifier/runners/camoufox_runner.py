@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from verifier.playwright_runner import (
-    _run_playwright_isolated,
+    _run_in_subprocess,
     _shot,
     SCREENSHOTS_DIR,
     playwright_available,
@@ -39,23 +39,29 @@ def dre_lookup_stealth(
 ) -> dict:
     """Drive a DRE site through Camoufox (Firefox + stealth patches)."""
     if not camoufox_available():
-        # Fall back to plain Playwright. Caller's trace should note this.
+        # Fall back to plain Playwright (in subprocess). Caller's trace should note this.
         if not playwright_available():
             from verifier.playwright_runner import _offline_dre
             return _offline_dre(license_no, base_url)
-        from verifier.playwright_runner import _dre_lookup_impl
-        return _run_playwright_isolated(
-            _dre_lookup_impl, license_no, base_url, selectors, headed, slow_mo_ms,
-        )
+        result = _run_in_subprocess("dre_lookup", {
+            "license_no": license_no, "base_url": base_url, "selectors": selectors,
+            "headed": headed, "slow_mo_ms": slow_mo_ms,
+        }, timeout=90)
+        if result.get("ok") is False:
+            from verifier.playwright_runner import _offline_dre
+            return _offline_dre(license_no, base_url)
+        result["runner"] = result.get("runner") or "playwright-fallback-from-camoufox"
+        return result
 
-    try:
-        return _run_playwright_isolated(
-            _dre_lookup_camoufox_impl, license_no, base_url, selectors, headed, slow_mo_ms,
-        )
-    except Exception as e:  # noqa: BLE001
-        print(f"[camoufox_runner] dre_lookup_stealth fell back: {e}")
+    result = _run_in_subprocess("dre_lookup_camoufox", {
+        "license_no": license_no, "base_url": base_url, "selectors": selectors,
+        "headed": headed, "slow_mo_ms": slow_mo_ms,
+    }, timeout=120)  # Camoufox cold start is slower
+    if result.get("ok") is False:
+        print(f"[camoufox_runner] dre_lookup_stealth fell back: {result.get('error')}")
         from verifier.playwright_runner import _offline_dre
         return _offline_dre(license_no, base_url)
+    return result
 
 
 def _dre_lookup_camoufox_impl(
