@@ -450,12 +450,11 @@ def _dre_lookup_impl(
     steps = result["steps"]
 
     with _browser(headed=headed, slow_mo_ms=slow_mo_ms) as page:
+        # Open with just domcontentloaded — no networkidle wait, so we don't
+        # spend 3-4s before typing into the form (user feedback: "it takes
+        # more time to input the number").
         page.goto(base_url, timeout=20000, wait_until="domcontentloaded")
-        try:
-            page.wait_for_load_state("networkidle", timeout=3500)
-        except Exception:
-            pass
-        # Screenshot #1 of 2: proof the project opened the right page
+        # Screenshot #1 of 3: proof the project opened the right page
         result["screenshots"].append(_shot(page, "dre-01-landing"))
         steps.append({"step": "open", "ok": True, "url": base_url})
 
@@ -514,14 +513,20 @@ def _dre_lookup_impl(
         else:
             steps.append({"step": "submit", "ok": True, "selector": clicked})
 
-        # 3) Short wait for results. No human CAPTCHA wait — if CAPTCHA
-        #    blocks us we fail fast and route to HITL.
+        # 3) Wait for results, then STAY CALMLY so the names render before
+        #    we screenshot or navigate away (user feedback: "just after the
+        #    result came, it suddenly closed").
         row_sel_list = _as_list(selectors.get("result_rows", "table tbody tr"))
         row_sel_primary = row_sel_list[0] if row_sel_list else "table tbody tr"
         no_results_sel = selectors.get("no_results_marker")
         try:
-            page.wait_for_selector(row_sel_primary, timeout=15000, state="attached")
+            # state="visible" — wait until at least one row is actually shown
+            page.wait_for_selector(row_sel_primary, timeout=15000, state="visible")
+            # Brief settle for SF Lightning / React to finish rendering names
+            page.wait_for_timeout(1500)
             steps.append({"step": "wait_for_results", "ok": True})
+            # Screenshot #2 of 3: results page with the person name(s) visible
+            result["screenshots"].append(_shot(page, "dre-02-results"))
         except Exception:
             # No structured rows — maybe a no_results banner or CAPTCHA
             no_res_el, _ = _try_query(page, no_results_sel) if no_results_sel else (None, None)
@@ -730,12 +735,10 @@ def _dre_lookup_impl(
                     page.wait_for_load_state("domcontentloaded", timeout=6000)
                 except Exception:
                     pass
-                try:
-                    page.wait_for_load_state("networkidle", timeout=3500)
-                except Exception:
-                    pass
-                # Screenshot #2 of 2: proof of data extracted from detail page
-                result["screenshots"].append(_shot(page, "dre-02-detail"))
+                # Calm settle so the expiration value renders before screenshot
+                page.wait_for_timeout(1200)
+                # Screenshot #3 of 3: detail page with expiration date visible
+                result["screenshots"].append(_shot(page, "dre-03-detail"))
                 result["html"] = page.content()
                 steps.append({"step": "click_detail", "ok": True,
                               "picked_index": target_idx, "strategy": click_strategy})
@@ -774,6 +777,12 @@ def _dre_lookup_impl(
 
                 steps.append({"step": "extract_expiration", "ok": bool(result["expiration"]),
                               "raw": exp_text, "normalized": result["expiration"]})
+                # Hold the detail page on screen ~1.5s so the panel can see
+                # the expiration value before the browser closes.
+                try:
+                    page.wait_for_timeout(1500)
+                except Exception:
+                    pass
             else:
                 steps.append({"step": "click_detail", "ok": False,
                               "error": "no clickable detail link"})

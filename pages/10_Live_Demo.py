@@ -243,9 +243,9 @@ if run_clicked:
     if not practice and playwright_available():
         st.info(
             "🌐  **Live mode.** A real browser window will open and drive the actual DRE site. "
-            "Two screenshots are captured: the landing page (proof the project opened it) and "
-            "the license detail page (proof of data extraction). If reCAPTCHA appears the workflow "
-            "fails fast and routes to HITL — no human wait."
+            "Three screenshots are captured calmly — landing, results page (with the person's name "
+            "visible), and license detail page (with the expiration date). If reCAPTCHA appears the "
+            "workflow fails fast and routes to HITL — no human wait."
         )
     if not playwright_available() and not practice:
         st.warning(
