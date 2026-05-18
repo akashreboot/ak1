@@ -108,9 +108,11 @@ ROUTER = AntiBotRouter()
 # ── Runner dispatch ───────────────────────────────────────────────────────
 
 def camoufox_available() -> bool:
+    """Delegates to the runner's authoritative check (verifies BOTH the
+    Python module and the fetched Firefox binary exist)."""
     try:
-        import camoufox  # noqa: F401
-        return True
+        from verifier.runners.camoufox_runner import camoufox_available as _check
+        return _check()
     except Exception:
         return False
 

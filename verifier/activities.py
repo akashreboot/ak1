@@ -97,25 +97,40 @@ def _synthesize_profile_from_crm(agent: dict, primary_url: str, why: str = "") -
 # ── 3. Cross-check CRM ↔ profile ──────────────────────────────────────────
 
 def cross_check_profile(ctx: TraceContext) -> dict:
-    """Compare CRM-side metadata to what we found on onereal.com."""
+    """Compare CRM-side metadata to what we found on onereal.com.
+
+    License-number source-of-truth:
+      * Demo agents — PINNED to the value in their fixture record (avoids
+        garbage matches from onereal.com's free-form HTML).
+      * Other agents — prefer the profile's parsed license # only if it
+        looks valid (has digits, isn't suspiciously generic), else CRM.
+    """
     crm = ctx.crm
     profile = ctx.onereal
+    is_demo = bool(ctx.agent.get("onboarding", {}).get("is_real_demo_target"))
 
     crm_state = crm["license"]["state_code"]
     profile_state = profile.get("state_code")
-
-    # Allow profile parse to miss state if we couldn't extract; tolerate but flag
     state_ok = profile_state is None or profile_state == crm_state
 
     name_score = name_similarity(crm["name"]["full"], profile.get("name") or "")
     name_ok = name_score >= 0.5 or profile.get("name") is None
 
-    # If the onereal profile published a license #, prefer it over the CRM's
-    # cached value — the profile is the canonical "what the agent claims".
-    license_from_profile = profile.get("license_number")
-    final_license_no = license_from_profile or crm["license"].get("number")
+    license_from_profile = (profile.get("license_number") or "").strip()
+    crm_license = (crm["license"].get("number") or "").strip()
 
-    if not final_license_no:
+    if is_demo and crm_license:
+        # Trust the fixture for demo agents — the profile parser sometimes
+        # grabs junk like 'Information-About-Br' from free-form HTML.
+        final_license_no = crm_license
+        license_source = "demo_pinned"
+    elif license_from_profile and _looks_like_license_number(license_from_profile):
+        final_license_no = license_from_profile
+        license_source = "onereal_profile"
+    elif crm_license:
+        final_license_no = crm_license
+        license_source = "crm_fallback"
+    else:
         raise RetryableError("no license number available from CRM or profile")
 
     return {
@@ -123,9 +138,38 @@ def cross_check_profile(ctx: TraceContext) -> dict:
         "name_similarity": name_score,
         "name_match": name_ok,
         "license_number": final_license_no,
-        "license_source": "onereal_profile" if license_from_profile else "crm",
+        "license_source": license_source,
+        "profile_license_raw": license_from_profile or None,
         "needs_quarantine": not (state_ok and name_ok),
     }
+
+
+def _looks_like_license_number(s: str) -> bool:
+    """Reject obvious false-positives from the profile parser.
+
+    A real-estate license # is almost always mostly numeric (CA 8 digits,
+    TX 7 digits, WA 6 digits, FL SL+6 digits). Reject candidates that:
+      * don't contain at least 3 digits, OR
+      * contain lowercase letters (real license formats are uppercase),
+        OR look like word fragments (>= 3 letters in a row).
+    """
+    if not s:
+        return False
+    digits = sum(1 for c in s if c.isdigit())
+    if digits < 3:
+        return False
+    if any(c.islower() for c in s):
+        return False
+    # Reject runs of 3+ consecutive letters (e.g. "Information-About-Br")
+    run = 0
+    for c in s:
+        if c.isalpha():
+            run += 1
+            if run >= 4:
+                return False
+        else:
+            run = 0
+    return True
 
 
 # ── 4. Resolve adapter + pick browser tier ────────────────────────────────

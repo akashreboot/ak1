@@ -21,10 +21,31 @@ from verifier.playwright_runner import (
 
 
 def camoufox_available() -> bool:
+    """Returns True only when BOTH the Python module AND the Firefox binary
+    are present. Without the binary, Camoufox launches fail with
+    'executable doesn't exist'. Detecting that here lets the router fall
+    straight to plain Playwright (which is REAL and visible) rather than
+    losing time on a subprocess that's guaranteed to crash."""
     try:
         import camoufox  # noqa: F401
-        return True
     except Exception:
+        return False
+    # Check that the Firefox binary has been fetched (`python -m camoufox fetch`)
+    try:
+        import os
+        import sys
+        from pathlib import Path
+        if sys.platform == "win32":
+            cache = Path(os.environ.get("LOCALAPPDATA", "")) / "camoufox" / "camoufox" / "Cache"
+            exe = cache / "camoufox.exe"
+        elif sys.platform == "darwin":
+            exe = Path.home() / "Library" / "Caches" / "camoufox" / "camoufox"
+        else:
+            exe = Path.home() / ".cache" / "camoufox" / "camoufox"
+        return exe.exists()
+    except Exception:
+        # If we can't check, assume not available — better to use the
+        # known-good plain-Playwright path than to crash on launch.
         return False
 
 
@@ -39,31 +60,49 @@ def dre_lookup_stealth(
     flow=None,
     state_code=None,
 ) -> dict:
-    """Drive a DRE site through Camoufox (Firefox + stealth patches)."""
-    if not camoufox_available():
-        # Fall back to plain Playwright (in subprocess). Caller's trace should note this.
-        if not playwright_available():
-            from verifier.playwright_runner import _offline_dre
-            return _offline_dre(license_no, base_url, state_code=state_code)
-        result = _run_in_subprocess("dre_lookup", {
-            "license_no": license_no, "base_url": base_url, "selectors": selectors,
-            "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
-        }, timeout=90)
-        if result.get("ok") is False:
-            from verifier.playwright_runner import _offline_dre
-            return _offline_dre(license_no, base_url, state_code=state_code)
-        result["runner"] = result.get("runner") or "playwright-fallback-from-camoufox"
-        return result
+    """Drive a DRE site through Camoufox (Firefox + stealth patches).
 
-    result = _run_in_subprocess("dre_lookup_camoufox", {
+    Fallback chain (no silent hardcoded substitution):
+      1. Camoufox (T2 stealth) — if Python module installed AND binary fetched
+      2. Plain Playwright Chromium (T1) — real visible browser, may hit CAPTCHA
+      3. _offline_dre — ONLY when Playwright itself isn't installed at all
+      4. Subprocess failure → propagate error so caller routes to HITL
+    """
+    pw_args = {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
-    }, timeout=120)  # Camoufox cold start is slower
-    if result.get("ok") is False:
-        print(f"[camoufox_runner] dre_lookup_stealth fell back: {result.get('error')}")
-        from verifier.playwright_runner import _offline_dre
-        return _offline_dre(license_no, base_url, state_code=state_code)
-    return result
+    }
+
+    # ── Step 1: try Camoufox if available ────────────────────────────
+    if camoufox_available():
+        result = _run_in_subprocess(
+            "dre_lookup_camoufox", pw_args, timeout=200,
+        )
+        if result.get("ok") is not False:
+            result["runner"] = result.get("runner") or "camoufox"
+            return result
+        # Camoufox subprocess failed (e.g. binary not fetched, OS incompatibility).
+        # Don't fake a result — fall through to plain Playwright (still a REAL browser).
+        print(f"[camoufox] launch failed; falling back to plain Playwright. error: {result.get('error', '')[:160]}")
+
+    # ── Step 2: plain Playwright (real Chromium, no stealth) ─────────
+    if playwright_available():
+        result = _run_in_subprocess("dre_lookup", pw_args, timeout=200)
+        if result.get("ok") is not False:
+            result["runner"] = "playwright-fallback-from-camoufox"
+            return result
+        # Real subprocess failure — propagate honestly, do NOT fake.
+        return {
+            "license_no": license_no, "found": False, "name": None,
+            "expiration": None, "captcha": "captcha" in (result.get("error") or "").lower(),
+            "html": None, "screenshots": [], "candidates": [],
+            "error": result.get("error"),
+            "_subprocess_failed": True, "runner": "playwright-fallback-from-camoufox",
+        }
+
+    # ── Step 3: Playwright not installed at all — synthesize ──────────
+    from verifier.playwright_runner import _offline_dre
+    return _offline_dre(license_no, base_url, state_code=state_code)
 
 
 def _dre_lookup_camoufox_impl(
