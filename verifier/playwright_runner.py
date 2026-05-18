@@ -213,13 +213,12 @@ def dre_lookup(
         # Playwright not installed at all — only here do we synthesize.
         return _offline_dre(license_no, base_url, state_code=state_code)
 
-    # Allow up to 3 minutes per call so a human can solve a reCAPTCHA in
-    # the visible browser window if one appears.
+    # Total subprocess time budget — short, no human CAPTCHA wait.
     result = _run_in_subprocess("dre_lookup", {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
         "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
         "expected_name": expected_name, "expected_license_type": expected_license_type,
-    }, timeout=200)
+    }, timeout=60)
 
     if result.get("ok") is False:
         # DO NOT silently substitute hardcoded results. Surface the real
@@ -451,11 +450,12 @@ def _dre_lookup_impl(
     steps = result["steps"]
 
     with _browser(headed=headed, slow_mo_ms=slow_mo_ms) as page:
-        page.goto(base_url, timeout=25000, wait_until="domcontentloaded")
+        page.goto(base_url, timeout=20000, wait_until="domcontentloaded")
         try:
-            page.wait_for_load_state("networkidle", timeout=6000)
+            page.wait_for_load_state("networkidle", timeout=3500)
         except Exception:
             pass
+        # Screenshot #1 of 2: proof the project opened the right page
         result["screenshots"].append(_shot(page, "dre-01-landing"))
         steps.append({"step": "open", "ok": True, "url": base_url})
 
@@ -492,10 +492,8 @@ def _dre_lookup_impl(
         if not used_sel:
             steps.append({"step": "fill_license", "ok": False, "error": "no selector matched"})
             result["error"] = "could_not_locate_license_input"
-            result["screenshots"].append(_shot(page, "dre-02-error-no-input"))
             return result
         steps.append({"step": "fill_license", "ok": True, "value": license_no, "selector": used_sel})
-        result["screenshots"].append(_shot(page, "dre-02-filled"))
 
         # 2) Submit (scoped to the same form so we don't trigger Site Search)
         clicked = _try_click(
@@ -516,41 +514,30 @@ def _dre_lookup_impl(
         else:
             steps.append({"step": "submit", "ok": True, "selector": clicked})
 
-        # 3) ⏳ LONG WAIT for results to appear. If reCAPTCHA blocks the
-        #    submission, the page won't navigate until a human checks
-        #    "I'm not a robot" in the visible browser window. We give them
-        #    up to 2 minutes; once results appear the automation resumes.
+        # 3) Short wait for results. No human CAPTCHA wait — if CAPTCHA
+        #    blocks us we fail fast and route to HITL.
         row_sel_list = _as_list(selectors.get("result_rows", "table tbody tr"))
         row_sel_primary = row_sel_list[0] if row_sel_list else "table tbody tr"
         no_results_sel = selectors.get("no_results_marker")
-        results_appeared = False
         try:
-            page.wait_for_selector(row_sel_primary, timeout=120000, state="attached")
-            results_appeared = True
-            steps.append({"step": "wait_for_results", "ok": True,
-                          "note": "results table appeared (CAPTCHA solved if it was present)"})
+            page.wait_for_selector(row_sel_primary, timeout=15000, state="attached")
+            steps.append({"step": "wait_for_results", "ok": True})
         except Exception:
-            # See if a "no results" message appeared instead
+            # No structured rows — maybe a no_results banner or CAPTCHA
             no_res_el, _ = _try_query(page, no_results_sel) if no_results_sel else (None, None)
             if no_res_el:
-                steps.append({"step": "wait_for_results", "ok": True, "note": "no_results message"})
+                steps.append({"step": "wait_for_results", "ok": True, "note": "no_results"})
             else:
-                # Real failure — likely CAPTCHA not solved, or the site changed
                 body_low = (page.content() or "").lower()
                 if any(m in body_low for m in ("recaptcha", "verify you are human", "checking your browser")):
                     result["captcha"] = True
                     result["html"] = page.content()
-                    result["screenshots"].append(_shot(page, "dre-03-captcha-wall"))
-                    steps.append({"step": "captcha_wall", "ok": False,
-                                  "reason": "results never appeared — CAPTCHA likely unsolved"})
+                    steps.append({"step": "captcha_wall", "ok": False})
                     return result
                 steps.append({"step": "wait_for_results", "ok": False,
-                              "error": "timeout after 120s — no results, no captcha marker"})
-                result["screenshots"].append(_shot(page, "dre-03-timeout"))
-                result["error"] = "timeout_waiting_for_results_120s"
+                              "error": "timeout 15s — no results, no captcha"})
+                result["error"] = "timeout_waiting_for_results"
                 return result
-
-        result["screenshots"].append(_shot(page, "dre-03-results"))
 
         # 4) Parse result rows into candidates
         rows = []
@@ -740,14 +727,15 @@ def _dre_lookup_impl(
 
             if clicked_detail:
                 try:
-                    page.wait_for_load_state("networkidle", timeout=15000)
+                    page.wait_for_load_state("domcontentloaded", timeout=6000)
                 except Exception:
                     pass
                 try:
-                    page.wait_for_load_state("domcontentloaded", timeout=8000)
+                    page.wait_for_load_state("networkidle", timeout=3500)
                 except Exception:
                     pass
-                result["screenshots"].append(_shot(page, "dre-04-detail"))
+                # Screenshot #2 of 2: proof of data extracted from detail page
+                result["screenshots"].append(_shot(page, "dre-02-detail"))
                 result["html"] = page.content()
                 steps.append({"step": "click_detail", "ok": True,
                               "picked_index": target_idx, "strategy": click_strategy})
@@ -786,20 +774,9 @@ def _dre_lookup_impl(
 
                 steps.append({"step": "extract_expiration", "ok": bool(result["expiration"]),
                               "raw": exp_text, "normalized": result["expiration"]})
-
-                # Hold the browser visible for a moment so the panel sees the detail page
-                try:
-                    page.wait_for_timeout(2500)
-                except Exception:
-                    pass
             else:
                 steps.append({"step": "click_detail", "ok": False,
-                              "error": "no clickable detail link found via any strategy"})
-                # Hold the results page visible so the panel sees what happened
-                try:
-                    page.wait_for_timeout(5000)
-                except Exception:
-                    pass
+                              "error": "no clickable detail link"})
 
         else:
             # Single-page: try to extract expiration directly from the first row

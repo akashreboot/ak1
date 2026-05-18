@@ -258,7 +258,7 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
 
     runner_kwargs = dict(
         license_no=license_no, base_url=base_url, selectors=selectors,
-        headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
+        headed=headed, slow_mo_ms=80, flow=flow, state_code=state,
         expected_name=expected_name, expected_license_type=expected_license_type,
     )
 

@@ -195,14 +195,18 @@ def run_verification(
         # profile fetch — open → fill → submit → wait → parse → click → extract.
         STEP_LABELS = {
             "open":              ("🌐", "Opened live DRE page"),
+            "form_scope":        ("🎯", "Scoped to license-search form"),
             "recaptcha_detected":("⚠",  "reCAPTCHA widget detected on page"),
             "fill_license":      ("⌨",  "Typed license number into form"),
             "submit":            ("🖱",  "Clicked Search"),
-            "wait_for_results":  ("⏳",  "Waited for results to appear (up to 2 min for human to solve CAPTCHA)"),
-            "captcha_wall":      ("🛑", "Blocked by CAPTCHA wall"),
+            "wait_for_results":  ("⏳",  "Waited for results"),
+            "captcha_wall":      ("🛑", "Blocked by CAPTCHA — routed to HITL"),
             "parse_results":     ("📑", "Parsed candidate rows"),
-            "click_detail":      ("👉", "Clicked through to license detail page"),
-            "extract_expiration":("📅", "Extracted expiration date from detail page"),
+            "parse_results_fallback_anchors": ("📑", "Parsed result anchors (fallback)"),
+            "pick_row":          ("🎯", "Picked best-matching row"),
+            "row_html_dump":     ("·",  "(diagnostic) row HTML dumped"),
+            "click_detail":      ("👉", "Navigated to license detail page"),
+            "extract_expiration":("📅", "Extracted expiration date"),
         }
         for st in (ctx.dre.get("steps") or []):
             icon, label = STEP_LABELS.get(st.get("step", ""), ("·", st.get("step", "step")))

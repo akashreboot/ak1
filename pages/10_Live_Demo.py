@@ -243,9 +243,9 @@ if run_clicked:
     if not practice and playwright_available():
         st.info(
             "🌐  **Live mode.** A real browser window will open and drive the actual DRE site. "
-            "If a **reCAPTCHA** appears (most likely on WA DOL), solve it in the browser window — "
-            "the automation will wait up to 2 minutes for results and pick up automatically once "
-            "the page loads."
+            "Two screenshots are captured: the landing page (proof the project opened it) and "
+            "the license detail page (proof of data extraction). If reCAPTCHA appears the workflow "
+            "fails fast and routes to HITL — no human wait."
         )
     if not playwright_available() and not practice:
         st.warning(
