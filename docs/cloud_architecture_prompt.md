@@ -2,8 +2,8 @@
 
 > Paste this prompt into any senior-architect-grade tool (Claude, GPT-5, an AWS
 > Solutions Architect, etc.) to get a production cloud architecture for the system
-> prototyped in this repo. The prompt is self-contained — it doesn't assume the
-> reader has seen the prototype.
+> prototyped in this project. The prompt is self-contained — it doesn't
+> assume the reader has seen the prototype.
 
 ---
 

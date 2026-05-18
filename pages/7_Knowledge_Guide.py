@@ -80,7 +80,7 @@ with categories[1]:
          <b>Why here:</b> Stagehand's <b>auto-caching of successful selectors</b> is the magic. Steady-state
          runs use the cache (zero LLM cost). When the page changes, the AI re-derives — and the system
          self-heals without us touching code.<br/>
-         <b>Alternatives:</b> <a href="https://github.com/browser-use/browser-use">Browser-Use</a>
+         <b>Alternatives:</b> Browser-Use
          (every action reasoned each run — more flexible, more expensive), <a href="https://www.skyvern.com">Skyvern</a>,
          hand-rolled GPT-orchestrated Playwright.
          """,

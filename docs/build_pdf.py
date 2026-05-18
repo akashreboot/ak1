@@ -3,7 +3,7 @@
 Interactive means:
   * PDF bookmarks (table of contents in the reader's sidebar)
   * Clickable internal TOC on the cover page
-  * Clickable external URLs (project repo, DRE sites, model docs)
+  * Clickable external URLs (DRE sites, model docs, vendor docs)
 
 Run:
     python -m docs.build_pdf
@@ -300,9 +300,7 @@ def _cover(story):
 
     story.append(Spacer(1, 0.4 * inch))
     story.append(Paragraph(
-        f"Build date: {date.today().isoformat()} · "
-        f"Repo: { link('github.com/akashreboot/ak1', 'https://github.com/akashreboot/ak1') } · "
-        f"Live demo: { link('localhost:8501', 'http://localhost:8501') }",
+        f"Build date: {date.today().isoformat()}",
         CAPTION,
     ))
 
@@ -579,9 +577,8 @@ def _next_steps(story):
 
     story.append(Spacer(1, 0.4 * inch))
     story.append(Paragraph("Reference links", H3))
-    story.append(bullet("Repository: " + link("github.com/akashreboot/ak1", "https://github.com/akashreboot/ak1")))
     story.append(bullet("Playwright: " + link("playwright.dev/python", "https://playwright.dev/python/")))
-    story.append(bullet("Camoufox: " + link("github.com/daijro/camoufox", "https://github.com/daijro/camoufox")))
+    story.append(bullet("Camoufox: " + link("camoufox.com", "https://camoufox.com")))
     story.append(bullet("Browserbase: " + link("browserbase.com", "https://www.browserbase.com")))
     story.append(bullet("Temporal: " + link("temporal.io", "https://temporal.io")))
     story.append(bullet("Anthropic API: " + link("docs.claude.com", "https://docs.claude.com")))
