@@ -181,12 +181,41 @@ def run_verification(
             detail=f"runner={adapter_info['runner']}  adapter={adapter_info['state_code']}@{adapter_info['adapter_version']}  disambig={adapter_info['disambiguation_required']}",
         )
 
-        # 5) DRE verify (real Playwright / Camoufox), using profile-chosen state
+        # 5) DRE verify — the activity title includes the actual license # so
+        #    the panel can see the value being fed into the DRE form.
         chosen_state = ctx.results.get("__chosen_state__") or agent["license"]["state_code"]
+        license_no_display = cross.get("license_number") or agent["license"].get("number") or "?"
         ctx.dre = yield from activity(
-            ctx, f"Verify on {chosen_state} DRE", "DRE",
+            ctx, f"Drive {chosen_state} DRE with license #{license_no_display}", "DRE",
             activities.dre_verify, headed=headed_browser,
         )
+
+        # Narrate the multi-page flow so the panel sees the disambiguation story
+        cand_list = ctx.dre.get("candidates") or []
+        if cand_list:
+            yield ctx.span(
+                "ok", "DRE",
+                f"📋 DRE returned {len(cand_list)} candidate row(s) for #{license_no_display}",
+                detail=" · ".join(
+                    f"[{i}] {c.get('name','?')} · {c.get('license_type','?')} · {c.get('status','?')}"
+                    for i, c in enumerate(cand_list)
+                ),
+            )
+            picked = ctx.dre.get("picked_row")
+            picked_idx = ctx.dre.get("picked_index")
+            if picked:
+                yield ctx.span(
+                    "ok", "Disambiguator",
+                    f"🎯 Picked row [{picked_idx}]: {picked.get('name','?')}",
+                    detail=f"license_type='{picked.get('license_type','?')}'  status='{picked.get('status','?')}'  city='{picked.get('city','?')}'",
+                )
+        if ctx.dre.get("expiration"):
+            raw = ctx.dre.get("expiration_raw") or ctx.dre.get("expiration")
+            yield ctx.span(
+                "ok", "DRE",
+                f"📅 Extracted Expiration Date: {raw}",
+                detail=f"normalized = {ctx.dre['expiration']}",
+            )
 
         # 6) Decide
         comparison = yield from activity(ctx, "Compare expiration (Claude)", "Claude (Haiku)",

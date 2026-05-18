@@ -131,15 +131,29 @@ def cross_check_profile(ctx: TraceContext) -> dict:
 # ── 4. Resolve adapter + pick browser tier ────────────────────────────────
 
 def resolve_adapter(ctx: TraceContext) -> dict:
-    """Pick the DRE adapter from the *profile's* state (the agent's published truth),
-    falling back to the CRM's state if the profile didn't expose one.
+    """Pick the DRE adapter for this agent.
 
-    This is what makes the demo agent-driven: change the agent's state on
-    onereal.com and the system automatically routes to a different DRE."""
+    Order of precedence:
+      1. Demo agents are PINNED to the state in their fixture record — this
+         keeps the demo deterministic (so James Nam ALWAYS goes to WA DOL,
+         Chris Porter to CA DRE, Khary Livingston to TX TREC) regardless of
+         what arbitrary state-name matches the profile parser may find in
+         onereal.com's HTML (which lists multiple operating states).
+      2. Otherwise, prefer the state extracted from the onereal profile (the
+         agent's own published truth).
+      3. Fall back to the CRM record.
+    """
+    agent = ctx.agent
     crm_state = ctx.crm["license"]["state_code"]
     profile_state = (ctx.onereal or {}).get("state_code")
-    state = profile_state or crm_state
-    state_source = "onereal_profile" if profile_state else "crm_fallback"
+    is_demo = bool(agent.get("onboarding", {}).get("is_real_demo_target"))
+
+    if is_demo:
+        state = crm_state
+        state_source = "demo_pinned"
+    else:
+        state = profile_state or crm_state
+        state_source = "onereal_profile" if profile_state else "crm_fallback"
 
     adapter = load_adapter(state)
     declared_tier = adapter.get("anti_bot_tier", TIER_NATIVE)
@@ -190,29 +204,23 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
         ctx.runner_used = "synthesized (practice mode)"
         return _synthesize_dre_from_crm(ctx)
 
+    flow = adapter["dre"].get("flow")  # e.g. "multi_page_detail" for WA
+
     if effective_tier == "T1" or runner_name in ("playwright", "browserbase-simulated", "playwright-fallback"):
-        # Plain Playwright path
         result = runner_mod.dre_lookup(
-            license_no=license_no,
-            base_url=base_url,
-            selectors=selectors,
-            headed=headed,
-            slow_mo_ms=180,
+            license_no=license_no, base_url=base_url, selectors=selectors,
+            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
         )
     elif effective_tier == "T2" and runner_name == "camoufox":
         from verifier.runners import camoufox_runner
         result = camoufox_runner.dre_lookup_stealth(
-            license_no=license_no,
-            base_url=base_url,
-            selectors=selectors,
-            headed=headed,
-            slow_mo_ms=180,
+            license_no=license_no, base_url=base_url, selectors=selectors,
+            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
         )
     else:
-        # Defensive fallback
         result = runner_mod.dre_lookup(
             license_no=license_no, base_url=base_url, selectors=selectors,
-            headed=headed, slow_mo_ms=180,
+            headed=headed, slow_mo_ms=180, flow=flow, state_code=state,
         )
 
     for sc in result.get("screenshots", []):
@@ -262,27 +270,47 @@ def dre_verify(ctx: TraceContext, headed: bool = True) -> dict:
 
     return {
         "expiration": expiration,
+        "expiration_raw": result.get("expiration_raw"),
         "extracted_via": "playwright_selector" if result.get("found") else "claude_html_fallback",
         "name_on_record": result.get("name"),
         "runner_used": result.get("runner", runner_name),
         "candidates_examined": len(candidates),
+        "candidates": result.get("candidates", []),
+        "picked_index": result.get("picked_index"),
+        "picked_row": result.get("picked_row"),
+        "steps": result.get("steps", []),
+        "flow": result.get("flow"),
+        "license_no": license_no,
+        "dre_url": base_url,
     }
 
 
 def _synthesize_dre_from_crm(ctx: TraceContext) -> dict:
-    """Graceful-degradation DRE result: use CRM expiration directly.
+    """Graceful-degradation DRE result that still drives the disambiguation
+    narrative when the agent has an expected_dre_result block (e.g. WA James Nam).
 
-    In production this would never happen — the workflow would retry, then
-    quarantine to HITL. But for demo robustness when no live network is
-    available, we want the panel to see the happy-path flow.
+    In production this branch never runs — the workflow would retry, then
+    quarantine to HITL. For the demo, we want the panel to still see the
+    'two rows → picked the right one → extracted June 15, 2026' story.
     """
     crm = ctx.crm
+    state = ctx.results.get("__chosen_state__") or crm["license"]["state_code"]
+    license_no = ctx.results.get("activity:Cross-check CRM ↔ profile", {}).get("license_number") or crm["license"].get("number")
+
+    # Re-use the offline DRE synthesizer (same path that handles WA's 2-row case).
+    from verifier.playwright_runner import _offline_dre
+    fake = _offline_dre(license_no, base_url=ctx.results.get("__chosen_dre_url__", ""), state_code=state)
     return {
-        "expiration": crm["license"].get("expires_at") or "2027-08-22",
+        "expiration": fake.get("expiration") or crm["license"].get("expires_at") or "2027-08-22",
+        "expiration_raw": fake.get("expiration_raw"),
         "extracted_via": "synthesized_from_crm",
-        "name_on_record": crm["name"]["full"],
+        "name_on_record": fake.get("name") or crm["name"]["full"],
         "runner_used": "synthesized",
-        "candidates_examined": 0,
+        "candidates_examined": len(fake.get("candidates", [])),
+        "candidates": fake.get("candidates", []),
+        "picked_row": fake.get("picked_row"),
+        "picked_index": fake.get("picked_index"),
+        "steps": fake.get("steps", []),
     }
 
 

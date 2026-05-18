@@ -1,20 +1,29 @@
-# Washington DOL Business & Professional Licensing — REAL site.
+# Washington DOL Business & Professional Licensing — REAL site, v2 adapter.
 # https://professions.dol.wa.gov/s/license-lookup
 #
-# This is a SALESFORCE LIGHTNING SPA (/s/ route). It uses Shadow DOM in some
-# components, async loading, and aggressive bot detection. Default tier: T2
-# (Camoufox with stealth fingerprinting). The router will auto-fallback to
-# plain Playwright if Camoufox isn't installed and narrate the substitution.
+# Real form (per screenshots captured 2026-05):
+#   1. Landing page has:
+#        - Radio: "Search for Licensee using a License Number" (default-selected)
+#        - Radio: "Advanced Search (Name, License type, County, UBI)"
+#        - Dropdown: Profession (optional — leave blank for broad search)
+#        - Text input: License Number
+#        - reCAPTCHA: "I'm not a robot"
+#        - Button: Search
+#   2. After submit, results page shows a table:
+#        Name | License | License Type | Status | Sub Status | Disciplinary Action | City
+#        Multiple rows possible — same # can be both Notary AND Real Estate Broker.
+#   3. Click the Name link → license detail page with full info including
+#        Expiration Date: "June 15, 2026" (Month DD, YYYY format).
 #
-# Disambiguation IS REQUIRED — same license # can return multiple rows
-# (e.g. Notary + Real Estate Broker), as demonstrated in the case study screenshots.
+# This adapter uses MULTI-SELECTOR fallback lists for resilience against
+# Salesforce Lightning component renames. The first matching selector wins.
 
 state_code: WA
 state_full_name: Washington
-version: v1
+version: v2
 last_updated: 2026-05-18
 maturity: ai_primitives
-anti_bot_tier: T2                        # Salesforce Lightning + bot detection
+anti_bot_tier: T2                        # Salesforce Lightning + reCAPTCHA
 
 profile_source:
   joinreal_url_pattern: "https://onereal.com/profile/{slug}"
@@ -28,30 +37,78 @@ dre:
   expected_license_types:
     - "Real Estate Broker"
     - "Real Estate Managing Broker"
-  disambiguation_required: true          # same license # may belong to multiple records
+  disambiguation_required: true
+  flow: multi_page_detail                # landing → results → detail
 
   selectors:
-    # Salesforce Lightning component selectors — these tend to be slot-based.
-    license_input: "input[name='LicenseNumber'], input[placeholder*='License Number'], input[aria-label*='License']"
-    submit_button: "button:has-text('Search'), button[type='submit']"
-    result_rows: "table tr, lightning-formatted-text"
+    # Step 1: license-number search-mode radio (usually pre-selected)
+    search_mode_license_radio:
+      - "input[type='radio'][value*='License' i]"
+      - "input[type='radio'][name*='search' i]"
+
+    # Step 2: optional profession dropdown (leave blank for broadest search)
+    profession_select:
+      - "select[name*='profession' i]"
+      - "lightning-combobox[data-label*='Profession' i]"
+
+    # Step 3: the license number text input (multi-fallback because SF Lightning)
+    license_input:
+      - "input[name='License_Number']"
+      - "input[name='LicenseNumber']"
+      - "lightning-input[data-label*='License Number' i] input"
+      - "input[placeholder*='License Number' i]"
+      - "input[aria-label*='License Number' i]"
+      - "input[type='text']:visible"
+
+    # Step 4: reCAPTCHA detection (we may need to surface a HITL pause)
+    recaptcha_marker:
+      - ".g-recaptcha"
+      - "iframe[src*='recaptcha']"
+      - "iframe[title*='reCAPTCHA' i]"
+
+    # Step 5: submit button
+    submit_button:
+      - "button:has-text('Search')"
+      - "lightning-button[label='Search'] button"
+      - "input[type='submit'][value*='Search' i]"
+
+    # Step 6: parse results table
+    result_rows:
+      - "table tbody tr"
+      - "lightning-datatable tr[data-row-key]"
     result_columns:
-      name: "[data-label='Name'], td:nth-child(1)"
-      license_number: "[data-label='License'], td:nth-child(2)"
-      license_type: "[data-label='License Type'], td:nth-child(3)"
-      status: "[data-label='Status'], td:nth-child(4)"
-      city: "[data-label='City'], td:nth-child(7)"
+      name:           "td:nth-child(1)"
+      license_number: "td:nth-child(2)"
+      license_type:   "td:nth-child(3)"
+      status:         "td:nth-child(4)"
+      sub_status:     "td:nth-child(5)"
+      disciplinary:   "td:nth-child(6)"
+      city:           "td:nth-child(7)"
+
+    # Step 7: click the link in the Name column to reach the detail page
+    detail_link_in_row:
+      - "td:nth-child(1) a"
+      - "a[href*='licensee']"
+      - "th[scope='row'] a"
+
+    # Step 8: extract expiration date from the detail page
+    detail_expiration:
+      - "[data-label='Expiration Date']"
+      - "text=/Expiration Date:?\\s*([A-Za-z]+ \\d{1,2},? \\d{4})/i"
+    detail_name:
+      - "[data-label='Name']"
     no_results_marker: "text=/no results|no records found/i"
 
   ai_fallback_descriptions:
-    license_input: "the License Number input field on the Salesforce search page"
-    submit_button: "the Search button"
+    license_input: "the License Number input field on the Salesforce Lightning search page"
+    submit_button: "the Search submit button"
     result_table:  "the table of search results with columns: Name, License, License Type, Status, City"
-    expiration_field: "the expiration date for the selected row"
+    detail_link:   "the link in the Name column that opens the license detail page"
+    expiration_field: "the Expiration Date field on the license detail page (format: 'Month DD, YYYY')"
 
 retry_policy:
   max_attempts: 3
-  initial_backoff_ms: 2000              # SF Lightning is slower; bigger backoff
+  initial_backoff_ms: 2000
   multiplier: 2.0
 
-concurrency_cap: 5                       # cautious on SF rate limits
+concurrency_cap: 5

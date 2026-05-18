@@ -18,6 +18,22 @@
         "license_number_hint": "141102",
         "license_type": "Real Estate Broker"
       },
+      "expected_dre_result": {
+        "_comment": "Offline-fallback truth for WA #141102. Matches the screenshot evidence from professions.dol.wa.gov.",
+        "candidates": [
+          { "name": "KRISTA COOPER",  "license_number": "141102", "license_type": "Notary Public",      "status": "Canceled", "city": "SPOKANE" },
+          { "name": "James Bond NAM", "license_number": "141102", "license_type": "Real Estate Broker", "status": "Active",   "city": "BELLEVUE" }
+        ],
+        "picked_index": 1,
+        "expiration": "2026-06-15",
+        "expiration_raw": "June 15, 2026",
+        "first_issue_date": "2020-06-15",
+        "current_issue_date": "2024-06-13",
+        "licensee_firm": "REAL BROKER, LLC",
+        "city": "BELLEVUE",
+        "county": "King",
+        "program": "Real Estate"
+      },
       "scenario": "happy_path"
     },
     {

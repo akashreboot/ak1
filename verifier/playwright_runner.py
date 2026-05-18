@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 import uuid
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -171,59 +173,249 @@ def dre_lookup(
     selectors: dict,
     headed: bool = True,
     slow_mo_ms: int = 250,
+    flow: Optional[str] = None,
+    state_code: Optional[str] = None,
 ) -> dict:
-    """Drive a state DRE mock — fill license #, extract expiration."""
+    """Drive a state DRE — fill license #, capture screenshots, extract expiration.
+
+    Supports a `flow` argument:
+      - None / "single_page" — extract expiration directly from results page
+      - "multi_page_detail"  — click the matching result row → detail page →
+                               extract expiration from the detail page
+    """
     if not playwright_available():
-        return _offline_dre(license_no, base_url)
+        return _offline_dre(license_no, base_url, state_code=state_code)
     result = _run_in_subprocess("dre_lookup", {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
-        "headed": headed, "slow_mo_ms": slow_mo_ms,
+        "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
     })
     if result.get("ok") is False:
         print(f"[playwright_runner] dre_lookup fell back to offline: {result.get('error')}")
-        return _offline_dre(license_no, base_url)
+        return _offline_dre(license_no, base_url, state_code=state_code)
     return result
 
 
+# ── Selector helpers (multi-fallback lists) ──────────────────────────────
+
+def _as_list(value) -> list:
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]
+
+
+def _try_fill(page, selectors, value, timeout: int = 6000) -> Optional[str]:
+    for sel in _as_list(selectors):
+        try:
+            page.fill(sel, value, timeout=timeout)
+            return sel
+        except Exception:
+            continue
+    return None
+
+
+def _try_click(page, selectors, timeout: int = 6000) -> Optional[str]:
+    for sel in _as_list(selectors):
+        try:
+            page.click(sel, timeout=timeout)
+            return sel
+        except Exception:
+            continue
+    return None
+
+
+def _try_query(page, selectors):
+    for sel in _as_list(selectors):
+        try:
+            el = page.query_selector(sel)
+            if el:
+                return el, sel
+        except Exception:
+            continue
+    return None, None
+
+
+_DATE_PATTERNS = [
+    ("%B %d, %Y", re.compile(r"([A-Za-z]+ \d{1,2},?\s+\d{4})")),  # June 15, 2026
+    ("%b %d, %Y", re.compile(r"([A-Za-z]{3} \d{1,2},?\s+\d{4})")),
+    ("%Y-%m-%d",  re.compile(r"(\d{4}-\d{2}-\d{2})")),
+    ("%m/%d/%Y",  re.compile(r"(\d{1,2}/\d{1,2}/\d{4})")),
+]
+
+
+def _normalize_date(text: str) -> Optional[str]:
+    if not text:
+        return None
+    for fmt, pat in _DATE_PATTERNS:
+        m = pat.search(text)
+        if m:
+            try:
+                return datetime.strptime(m.group(1).replace(",", ""), fmt.replace(",", "")).strftime("%Y-%m-%d")
+            except Exception:
+                continue
+    return None
+
+
+# ── DRE driver: handles single-page and multi-page flows ─────────────────
+
 def _dre_lookup_impl(
     license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
+    flow: Optional[str] = None, state_code: Optional[str] = None,
 ) -> dict:
+    flow = flow or "single_page"
     result: dict = {
         "license_no": license_no, "found": False, "name": None,
-        "expiration": None, "captcha": False, "html": None, "screenshots": [],
+        "expiration": None, "expiration_raw": None,
+        "captcha": False, "html": None, "screenshots": [], "candidates": [],
+        "picked_index": None, "picked_row": None,
+        "flow": flow, "runner": "playwright", "steps": [],
     }
+    steps = result["steps"]
 
     with _browser(headed=headed, slow_mo_ms=slow_mo_ms) as page:
-        page.goto(base_url, timeout=15000)
-        result["screenshots"].append(_shot(page, "dre-landing"))
+        page.goto(base_url, timeout=25000, wait_until="domcontentloaded")
+        try:
+            page.wait_for_load_state("networkidle", timeout=6000)
+        except Exception:
+            pass
+        result["screenshots"].append(_shot(page, "dre-01-landing"))
+        steps.append({"step": "open", "ok": True, "url": base_url})
 
-        # Detect CAPTCHA wall (Hawaii path)
-        if page.query_selector('[data-captcha-wall]'):
+        # Detect reCAPTCHA before we even try to interact (informational)
+        recap_el, _ = _try_query(page, selectors.get("recaptcha_marker"))
+        if recap_el:
+            result["recaptcha_detected"] = True
+            steps.append({"step": "recaptcha_detected", "note": "reCAPTCHA widget present on page"})
+
+        # 1) Fill license number (visible in subsequent screenshot)
+        used_sel = _try_fill(page, selectors.get("license_input"), license_no)
+        if not used_sel:
+            steps.append({"step": "fill_license", "ok": False, "error": "no selector matched"})
+            result["error"] = "could_not_locate_license_input"
+            result["screenshots"].append(_shot(page, "dre-02-error-no-input"))
+            return result
+        steps.append({"step": "fill_license", "ok": True, "value": license_no, "selector": used_sel})
+        result["screenshots"].append(_shot(page, "dre-02-filled"))
+
+        # 2) Submit
+        clicked = _try_click(page, selectors.get("submit_button"))
+        if not clicked:
+            page.keyboard.press("Enter")
+            steps.append({"step": "submit", "ok": True, "via": "Enter key"})
+        else:
+            steps.append({"step": "submit", "ok": True, "selector": clicked})
+
+        try:
+            page.wait_for_load_state("networkidle", timeout=12000)
+        except Exception:
+            pass
+
+        # 3) Check for a CAPTCHA challenge after submit (Cloudflare / reCAPTCHA gate)
+        body = (page.content() or "").lower()
+        if "checking your browser" in body or "verify you are human" in body or (
+            "recaptcha" in body and "challenge" in body
+        ):
             result["captcha"] = True
             result["html"] = page.content()
+            result["screenshots"].append(_shot(page, "dre-03-captcha-wall"))
+            steps.append({"step": "captcha_wall", "ok": False, "reason": "post-submit challenge"})
             return result
 
-        page.fill(selectors["license_input"], license_no)
-        try:
-            page.click(selectors["submit_button"], timeout=3000)
-        except Exception:
-            # Form submission via Enter as a fallback
-            page.press(selectors["license_input"], "Enter")
-        page.wait_for_load_state("domcontentloaded", timeout=10000)
-        result["screenshots"].append(_shot(page, "dre-results"))
+        result["screenshots"].append(_shot(page, "dre-03-results"))
 
-        if page.query_selector(selectors.get("no_results_marker", "[data-no-results]")):
+        # 4) Parse result rows into candidates
+        row_sel = _as_list(selectors.get("result_rows", "table tbody tr"))
+        rows = []
+        for s in row_sel:
+            try:
+                rows = page.query_selector_all(s)
+                if rows:
+                    break
+            except Exception:
+                continue
+        col_map = selectors.get("result_columns", {}) or {}
+        for row in rows[:20]:
+            cand = {}
+            for label, col_sel in col_map.items():
+                try:
+                    el = row.query_selector(col_sel)
+                    if el:
+                        cand[label] = (el.inner_text() or "").strip()
+                except Exception:
+                    pass
+            if cand:
+                result["candidates"].append(cand)
+        steps.append({"step": "parse_results", "count": len(result["candidates"])})
+
+        # 5) Multi-page flow: click matching row → detail page → extract expiration
+        if flow == "multi_page_detail" and rows:
+            # Pick the row whose status looks Active
+            target_idx = next(
+                (i for i, c in enumerate(result["candidates"])
+                 if "active" in (c.get("status", "").lower())),
+                0,
+            )
+            target_row = rows[target_idx]
+            link_sel_list = _as_list(selectors.get("detail_link_in_row", "td:first-child a"))
+            link = None
+            for sel in link_sel_list:
+                try:
+                    link = target_row.query_selector(sel)
+                    if link:
+                        break
+                except Exception:
+                    continue
+            if link:
+                try:
+                    link.click()
+                    page.wait_for_load_state("networkidle", timeout=12000)
+                except Exception:
+                    pass
+                result["screenshots"].append(_shot(page, "dre-04-detail"))
+                result["html"] = page.content()
+                result["picked_index"] = target_idx
+                result["picked_row"] = result["candidates"][target_idx] if result["candidates"] else None
+                steps.append({"step": "click_detail", "ok": True, "picked_index": target_idx})
+
+                # Extract expiration via selector then regex fallback
+                exp_text = None
+                exp_el, _ = _try_query(page, selectors.get("detail_expiration"))
+                if exp_el:
+                    exp_text = (exp_el.inner_text() or "").strip()
+                if not exp_text:
+                    m = re.search(
+                        r"Expiration Date[:\s]+([A-Za-z]+\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/\d{4})",
+                        result["html"] or "",
+                    )
+                    if m:
+                        exp_text = m.group(1)
+                if exp_text:
+                    result["expiration_raw"] = exp_text
+                    result["expiration"] = _normalize_date(exp_text) or exp_text
+                    result["found"] = True
+
+                # Extract name from detail page
+                name_el, _ = _try_query(page, selectors.get("detail_name"))
+                if name_el:
+                    result["name"] = (name_el.inner_text() or "").strip()
+                steps.append({"step": "extract_expiration", "ok": bool(result["expiration"]),
+                              "raw": exp_text, "normalized": result["expiration"]})
+            else:
+                steps.append({"step": "click_detail", "ok": False, "error": "no detail link"})
+
+        else:
+            # Single-page: try to extract expiration directly from the first row
+            if result["candidates"]:
+                first = result["candidates"][0]
+                exp = first.get("expiration") or first.get("expires") or ""
+                exp_norm = _normalize_date(exp)
+                if exp_norm:
+                    result["found"] = True
+                    result["expiration"] = exp_norm
+                    result["expiration_raw"] = exp
+                    result["name"] = first.get("name")
+                    result["picked_index"] = 0
+                    result["picked_row"] = first
             result["html"] = page.content()
-            return result
-
-        exp_el = page.query_selector(selectors["expiration_field"])
-        name_el = page.query_selector(selectors.get("agent_name_field", '[data-field="name"]'))
-        if exp_el:
-            result["found"] = True
-            result["expiration"] = (exp_el.inner_text() or "").strip()
-        if name_el:
-            result["name"] = (name_el.inner_text() or "").strip()
-        result["html"] = page.content()
 
     return result
 
@@ -240,11 +432,14 @@ def _offline_joinreal(name: str) -> dict:
     return {"name": name, "found": True, "state": full_state, "screenshots": [], "offline": True}
 
 
-def _offline_dre(license_no: str, base_url: str) -> dict:
+def _offline_dre(license_no: str, base_url: str, state_code: Optional[str] = None) -> dict:
     """Synthesize a plausible DRE result when Playwright can't run live.
 
-    Looks up the license number against the V2 agent fixture; falls back to
-    a generic plausible expiration so the workflow always finishes a clean trace.
+    Demo agents may carry an `expected_dre_result` block in data/demo_agents.json
+    (e.g. the WA #141102 case with two real rows — Krista Cooper · Notary and
+    James Bond NAM · Real Estate Broker). When present, we return that
+    realistic disambiguation payload so the demo flow still shows the
+    'two rows → picked the right one → extracted expiration' story.
     """
     from verifier.agent_loader import load_all
     time.sleep(0.4)
@@ -252,12 +447,64 @@ def _offline_dre(license_no: str, base_url: str) -> dict:
         (a for a in load_all() if (a["license"].get("number") or "").lower() == (license_no or "").lower()),
         None,
     )
+
+    # Check demo_agents.json for an expected_dre_result block matching this agent
+    try:
+        demo_path = Path(__file__).resolve().parent.parent / "data" / "demo_agents.json"
+        demos = json.loads(demo_path.read_text()).get("agents", [])
+    except Exception:
+        demos = []
+    demo_entry = None
+    if agent:
+        for d in demos:
+            if d.get("agent_id") == agent.get("agent_id") and d.get("expected_dre_result"):
+                demo_entry = d
+                break
+
+    if demo_entry:
+        edr = demo_entry["expected_dre_result"]
+        picked = edr["candidates"][edr["picked_index"]]
+        html = (
+            f"<html><body>"
+            f"<h2>Professional License Details</h2>"
+            f"<div><b>License Number:</b> {license_no}</div>"
+            f"<div><b>License Type:</b> {picked['license_type']}</div>"
+            f"<div><b>Status:</b> {picked['status']}</div>"
+            f"<div><b>Name:</b> {picked['name']}</div>"
+            f"<div><b>City:</b> {edr.get('city', picked.get('city', ''))}</div>"
+            f"<div><b>State:</b> {agent['license']['state_code']}</div>"
+            f"<div><b>First Issue Date:</b> {edr.get('first_issue_date','')}</div>"
+            f"<div><b>Current Issue Date:</b> {edr.get('current_issue_date','')}</div>"
+            f"<div><b>Expiration Date:</b> {edr.get('expiration_raw', edr.get('expiration',''))}</div>"
+            f"<div><b>Licensee Firm:</b> {edr.get('licensee_firm','')}</div>"
+            f"</body></html>"
+        )
+        return {
+            "license_no": license_no, "found": True,
+            "expiration": edr["expiration"], "expiration_raw": edr.get("expiration_raw"),
+            "name": picked["name"], "captcha": False, "html": html,
+            "screenshots": [], "offline": True,
+            "candidates": edr["candidates"],
+            "picked_index": edr["picked_index"], "picked_row": picked,
+            "flow": "multi_page_detail",
+            "steps": [
+                {"step": "open", "ok": True, "url": base_url, "offline": True},
+                {"step": "fill_license", "ok": True, "value": license_no},
+                {"step": "submit", "ok": True},
+                {"step": "parse_results", "count": len(edr["candidates"])},
+                {"step": "click_detail", "ok": True, "picked_index": edr["picked_index"]},
+                {"step": "extract_expiration", "ok": True,
+                 "raw": edr.get("expiration_raw"), "normalized": edr["expiration"]},
+            ],
+        }
+
     if not agent:
         return {
             "license_no": license_no, "found": True,
             "expiration": "2027-08-22",
             "name": "(unknown licensee)",
             "captcha": False, "html": "", "screenshots": [], "offline": True,
+            "candidates": [], "steps": [],
         }
     exp = agent["license"].get("expires_at") or "2027-08-22"
     name = agent["name"]["full"]
@@ -265,4 +512,17 @@ def _offline_dre(license_no: str, base_url: str) -> dict:
     return {
         "license_no": license_no, "found": True, "expiration": exp, "name": name,
         "captcha": False, "html": html, "screenshots": [], "offline": True,
+        "candidates": [{"name": name, "license_number": license_no,
+                        "license_type": agent["license"].get("type", ""), "status": "Active"}],
+        "picked_index": 0,
+        "picked_row": {"name": name, "license_number": license_no,
+                       "license_type": agent["license"].get("type", ""), "status": "Active"},
+        "flow": "single_page",
+        "steps": [
+            {"step": "open", "ok": True, "url": base_url, "offline": True},
+            {"step": "fill_license", "ok": True, "value": license_no},
+            {"step": "submit", "ok": True},
+            {"step": "parse_results", "count": 1},
+            {"step": "extract_expiration", "ok": True, "normalized": exp},
+        ],
     }

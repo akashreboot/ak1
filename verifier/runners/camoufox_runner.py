@@ -36,36 +36,39 @@ def dre_lookup_stealth(
     selectors: dict,
     headed: bool = True,
     slow_mo_ms: int = 250,
+    flow=None,
+    state_code=None,
 ) -> dict:
     """Drive a DRE site through Camoufox (Firefox + stealth patches)."""
     if not camoufox_available():
         # Fall back to plain Playwright (in subprocess). Caller's trace should note this.
         if not playwright_available():
             from verifier.playwright_runner import _offline_dre
-            return _offline_dre(license_no, base_url)
+            return _offline_dre(license_no, base_url, state_code=state_code)
         result = _run_in_subprocess("dre_lookup", {
             "license_no": license_no, "base_url": base_url, "selectors": selectors,
-            "headed": headed, "slow_mo_ms": slow_mo_ms,
+            "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
         }, timeout=90)
         if result.get("ok") is False:
             from verifier.playwright_runner import _offline_dre
-            return _offline_dre(license_no, base_url)
+            return _offline_dre(license_no, base_url, state_code=state_code)
         result["runner"] = result.get("runner") or "playwright-fallback-from-camoufox"
         return result
 
     result = _run_in_subprocess("dre_lookup_camoufox", {
         "license_no": license_no, "base_url": base_url, "selectors": selectors,
-        "headed": headed, "slow_mo_ms": slow_mo_ms,
+        "headed": headed, "slow_mo_ms": slow_mo_ms, "flow": flow, "state_code": state_code,
     }, timeout=120)  # Camoufox cold start is slower
     if result.get("ok") is False:
         print(f"[camoufox_runner] dre_lookup_stealth fell back: {result.get('error')}")
         from verifier.playwright_runner import _offline_dre
-        return _offline_dre(license_no, base_url)
+        return _offline_dre(license_no, base_url, state_code=state_code)
     return result
 
 
 def _dre_lookup_camoufox_impl(
     license_no: str, base_url: str, selectors: dict, headed: bool, slow_mo_ms: int,
+    flow=None, state_code=None,
 ) -> dict:
     from camoufox.sync_api import Camoufox  # type: ignore
 
