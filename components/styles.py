@@ -1,4 +1,6 @@
 """Shared styling and reusable UI components for the Real Agent Verification System deck."""
+from __future__ import annotations
+
 import streamlit as st
 
 
