@@ -92,11 +92,28 @@ def _run_in_subprocess(task: str, args: dict, timeout: int = 90) -> dict:
 
 @contextmanager
 def _browser(headed: bool, slow_mo_ms: int):
+    """Real Chromium context. ignore_https_errors=True tolerates corporate
+    proxies / AV that do TLS inspection (we saw ERR_CERT_AUTHORITY_INVALID
+    on a user's machine where SSL was being intercepted). A realistic
+    user-agent + an explicit accept-language make the site treat us as a
+    normal browser, which slightly lowers the odds of a CAPTCHA challenge."""
     from playwright.sync_api import sync_playwright
     with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=not headed, slow_mo=slow_mo_ms)
+        browser = pw.chromium.launch(
+            headless=not headed, slow_mo=slow_mo_ms,
+            args=["--disable-blink-features=AutomationControlled"],
+        )
         try:
-            ctx = browser.new_context(viewport={"width": 1280, "height": 800})
+            ctx = browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                ignore_https_errors=True,
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/126.0.0.0 Safari/537.36"
+                ),
+                extra_http_headers={"Accept-Language": "en-US,en;q=0.9"},
+            )
             page = ctx.new_page()
             yield page
         finally:
@@ -447,26 +464,61 @@ def _dre_lookup_impl(
                 "picked_status": target_cand.get("status"),
             })
 
-            # ── 3 click strategies, in order of robustness ────────────
+            # ── Capture the row HTML for diagnostics no matter what ──
+            try:
+                row_html_diag = (target_row.inner_html() or "")[:1500]
+                steps.append({"step": "row_html_dump", "html": row_html_diag})
+            except Exception:
+                pass
+
+            # ── 5 strategies, in order of robustness ──────────────────
             clicked_detail = False
             click_strategy = None
+            href_for_detail = None
 
-            # Strategy 1: declared selectors inside the target row
-            for sel in _as_list(selectors.get("detail_link_in_row", "td:first-child a")):
+            # Strategy A: extract href, navigate directly (bypasses all click handlers)
+            try:
+                link = target_row.query_selector("a[href]")
+                if link:
+                    href_for_detail = link.get_attribute("href")
+                # Also check for any anchor with href on the whole page that contains the name
+                if not href_for_detail and target_name:
+                    for a in page.query_selector_all("a[href]"):
+                        try:
+                            if (a.inner_text() or "").strip().lower() == target_name.lower():
+                                href_for_detail = a.get_attribute("href")
+                                break
+                        except Exception:
+                            continue
+            except Exception:
+                href_for_detail = None
+            if href_for_detail:
+                if not href_for_detail.startswith("http"):
+                    from urllib.parse import urljoin
+                    href_for_detail = urljoin(page.url, href_for_detail)
                 try:
-                    link = target_row.query_selector(sel)
-                    if link:
-                        link.click(timeout=6000)
-                        clicked_detail = True
-                        click_strategy = f"row_selector:{sel}"
-                        break
+                    page.goto(href_for_detail, timeout=20000, wait_until="domcontentloaded")
+                    clicked_detail = True
+                    click_strategy = f"direct_navigation:{href_for_detail[:80]}"
                 except Exception:
-                    continue
+                    clicked_detail = False
 
-            # Strategy 2: find link by visible text matching the row's name
+            # Strategy B: declared selectors inside the target row
+            if not clicked_detail:
+                for sel in _as_list(selectors.get("detail_link_in_row", "td:first-child a")):
+                    try:
+                        link = target_row.query_selector(sel)
+                        if link:
+                            link.click(timeout=6000)
+                            clicked_detail = True
+                            click_strategy = f"row_selector:{sel}"
+                            break
+                    except Exception:
+                        continue
+
+            # Strategy C: text-based locator for the row's name
             if not clicked_detail and target_name:
                 try:
-                    # get_by_role("link", name=...) is text-based and resilient
                     loc = page.get_by_role("link", name=re.compile(re.escape(target_name), re.IGNORECASE))
                     if loc.count() > 0:
                         loc.first.click(timeout=8000)
@@ -475,14 +527,26 @@ def _dre_lookup_impl(
                 except Exception:
                     pass
 
-            # Strategy 3: any link inside the target row
+            # Strategy D: force-click the first <a> in the row
             if not clicked_detail:
                 try:
                     any_link = target_row.query_selector("a")
                     if any_link:
-                        any_link.click(timeout=6000)
+                        any_link.click(timeout=6000, force=True)
                         clicked_detail = True
-                        click_strategy = "any_link_in_row"
+                        click_strategy = "any_link_in_row_force"
+                except Exception:
+                    pass
+
+            # Strategy E: JavaScript click on the first <a> in the row
+            if not clicked_detail:
+                try:
+                    any_link = target_row.query_selector("a")
+                    if any_link:
+                        any_link.evaluate("el => el.click()")
+                        page.wait_for_load_state("domcontentloaded", timeout=8000)
+                        clicked_detail = True
+                        click_strategy = "js_click_in_row"
                 except Exception:
                     pass
 
