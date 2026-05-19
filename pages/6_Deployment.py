@@ -237,6 +237,45 @@ with sec3:
 
 divider()
 
+# ── Unit economics ───────────────────────────────────────────────────────
+st.markdown("### Unit economics")
+st.markdown(
+    "<div style='color:#94A3B8; font-size:0.85rem; margin-bottom:10px;'>"
+    "Per-verification cost at the steady-state mix. Numbers are rounded; LLM costs assume "
+    "Haiku for classify, Opus only on selector-recovery fallback (~5% of runs)."
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+import pandas as pd
+COST_ROWS = [
+    ("T1 · Playwright Chromium",       "70%", "$0.003", "compute + selector cache + ledger write"),
+    ("T2 · Camoufox stealth",           "20%", "$0.006", "T1 + slower runs"),
+    ("T3 · Browserbase managed browser", "9%", "$0.04",  "managed browser + residential proxy + CAPTCHA solver"),
+    ("T4 · Human-in-the-loop",           "1%", "$5.00",  "operator-minutes (estimated; not infra)"),
+    ("LLM (Haiku classify + Opus fallback)", "—", "$0.004", "Haiku per run + Opus on ~5% fallback"),
+    ("Infra (RDS, S3, Redis, Datadog)",    "—", "$0.002", "amortized across 50K verifications/month"),
+]
+df = pd.DataFrame(COST_ROWS, columns=["Component", "Mix", "Per-call", "What's included"])
+st.dataframe(df, width="stretch", hide_index=True)
+
+st.markdown("#### Blended cost at scale")
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Per verification (blended)", "≈ $0.07", help="$0.02 infra + $0.05 amortized HITL")
+c2.metric("Excluding HITL operator time", "≈ $0.02", help="Pure infra + LLM")
+c3.metric("Monthly @ 50K runs", "≈ $3.4K", help="Includes operator time for 2.5% HITL rate")
+c4.metric("Annual @ 600K runs", "≈ $40K", help="Linear from monthly")
+
+st.markdown(
+    "<div style='color:#94A3B8; font-size:0.82rem; margin-top:6px;'>"
+    "<b>The HITL line dominates as volume grows.</b> The cheapest way to reduce total cost is to "
+    "raise the first-pass match rate — every 1% improvement saves ~$300/month at this volume."
+    "</div>",
+    unsafe_allow_html=True,
+)
+
+divider()
+
 # Cost & SLA
 st.markdown("### SLOs")
 slo1, slo2, slo3, slo4 = st.columns(4)
