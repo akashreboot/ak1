@@ -50,5 +50,9 @@ _MERMAID_TPL = """
 
 
 def mermaid(graph: str, height: int = 480) -> None:
-    """Render a Mermaid diagram inside a Streamlit page."""
-    components.html(_MERMAID_TPL.format(graph=graph), height=height, scrolling=False)
+    """Render a Mermaid diagram inside a Streamlit page.
+
+    Scrolling is enabled so a diagram taller than the iframe never gets clipped —
+    the user can scroll within the embedded frame instead.
+    """
+    components.html(_MERMAID_TPL.format(graph=graph), height=height, scrolling=True)

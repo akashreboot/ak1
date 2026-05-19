@@ -87,44 +87,62 @@ st.markdown(
 )
 
 mermaid("""
-flowchart TD
+flowchart TB
   classDef ai fill:#7c2d12,stroke:#f59e0b,color:#fef3c7,stroke-width:2px;
   classDef det fill:#0e7490,stroke:#06b6d4,color:#cffafe;
   classDef store fill:#065f46,stroke:#10b981,color:#d1fae5;
   classDef hitl fill:#991b1b,stroke:#ef4444,color:#fee2e2;
   classDef config fill:#5b21b6,stroke:#8b5cf6,color:#ede9fe;
 
-  A([CRM event: agent.activated]):::det --> B[Fetch agent metadata]:::det
-  B --> C[Fetch onereal.com profile<br/>Playwright]:::det
-  C --> D{Profile parsed?<br/>extract state + license #}:::det
-  D -- yes --> E[Cross-check<br/>name + state agree?]:::det
-  D -- no --> X[Quarantine to HITL]:::hitl
+  subgraph TRIG[" 1 · Trigger "]
+    direction LR
+    A([CRM event: agent.activated]):::det --> B[Fetch agent metadata]:::det
+  end
 
-  E --> F[(Load &lt;state&gt;.yaml<br/>from adapter registry)]:::config
-  F --> G[Router picks browser tier<br/>T1 → T2 → T3 → T4]:::det
-  G --> H[Drive state DRE<br/>fill license #, get results]:::det
-  H --> I{Selectors matched?}:::det
-  I -- yes --> J[Extract expiration date]:::det
-  I -- no --> K[Claude Opus<br/>extract from HTML]:::ai
-  K --> J
+  subgraph PROF[" 2 · Profile + cross-check "]
+    direction LR
+    C[Fetch onereal.com profile<br/>Playwright]:::det --> D{Profile parsed?}:::det
+    D -- yes --> E[Cross-check<br/>name + state]:::det
+    D -- no --> X1[Quarantine to HITL]:::hitl
+  end
 
-  J --> L{Multiple result rows?}:::det
-  L -- 1 row --> M[Use that row]:::det
-  L -- many --> N[Disambiguator<br/>score type+status+name+city]:::det
-  N --> O{Confident pick?}:::det
-  O -- yes --> M
-  O -- low margin --> P[Claude Haiku tiebreak]:::ai
-  P --> M
+  subgraph DRE[" 3 · Drive DRE "]
+    direction LR
+    F[(Load &lt;state&gt;.yaml<br/>from adapter registry)]:::config --> G[Pick browser tier<br/>T1 → T2 → T3 → T4]:::det
+    G --> H[Drive state DRE<br/>fill license # + search]:::det
+    H --> I{Selectors hit?}:::det
+    I -- yes --> J[Extract expiration]:::det
+    I -- no --> K[Claude Opus<br/>extract from HTML]:::ai
+    K --> J
+  end
 
-  M --> Q[Claude Haiku<br/>classify CRM vs DRE expiration]:::ai
-  Q --> R{Verdict}:::det
-  R -- match --> S[(Write ledger row)]:::store
-  R -- mismatch --> X
-  R -- ambiguous --> X
-  S --> T([Done])
+  subgraph DIS[" 4 · Disambiguate "]
+    direction LR
+    L{Multiple rows?}:::det
+    L -- 1 row --> M[Use that row]:::det
+    L -- many --> N[Score: type+status+name+city]:::det
+    N --> O{Confident?}:::det
+    O -- yes --> M
+    O -- close margin --> P[Claude Haiku tiebreak]:::ai
+    P --> M
+  end
 
-  X --> U[Slack alert<br/>action buttons resolve workflow signal]:::hitl
-""", height=820)
+  subgraph DEC[" 5 · Decide + persist "]
+    direction LR
+    Q[Claude Haiku<br/>compare expiration dates]:::ai --> R{Verdict}:::det
+    R -- match --> S[(Write ledger row)]:::store
+    R -- mismatch --> X2[Quarantine to HITL]:::hitl
+    R -- ambiguous --> X2
+  end
+
+  TRIG --> PROF
+  E --> DRE
+  J --> DIS
+  M --> Q
+  X1 --> U[Slack alert<br/>action buttons resume workflow]:::hitl
+  X2 --> U
+  S --> T2([Done])
+""", height=1100)
 
 divider()
 
@@ -155,7 +173,7 @@ flowchart LR
   E --> D2[dre.ca.gov]:::dre
   E --> D3[trec.texas.gov]:::dre
   E --> D4[... 47 state DREs]:::dre
-""", height=430)
+""", height=560)
 
 divider()
 
@@ -180,7 +198,7 @@ flowchart LR
 
   T2 -- 3 wins --> T1
   T3 -- 3 wins --> T2
-""", height=320)
+""", height=420)
 
 divider()
 
