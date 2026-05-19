@@ -241,6 +241,77 @@ st.dataframe(df, width="stretch", hide_index=True)
 
 divider()
 
+# ── Observation: agent ↔ DRE is one-to-many ──────────────────────────────
+st.markdown("### Observability: agent ↔ DRE is one-to-many")
+
+obs, sol = st.columns(2)
+with obs:
+    card(
+        "🔍  Observation",
+        "An agent can hold licenses in <b>multiple states</b>. One CRM record "
+        "fans out to several DRE verifications — one per state license.",
+        pills=[("Multi-state agents", "amber")],
+    )
+with sol:
+    card(
+        "💡  Solution",
+        "Each <code>(agent_id, state_code, license_no)</code> becomes its own "
+        "task. Routed independently through that state's YAML adapter; "
+        "results land as separate ledger rows under the same agent.",
+        pills=[("Per-state task", "mint")],
+    )
+
+st.markdown("##### Schema")
+mermaid("""
+erDiagram
+    AGENT ||--o{ LICENSE : "holds"
+    LICENSE }o--|| STATE_DRE : "verified against"
+    STATE_DRE ||--|| ADAPTER_YAML : "routed by"
+    LICENSE ||--o{ VERIFICATION_RUN : "produces"
+    VERIFICATION_RUN }o--|| LEDGER_ROW : "writes"
+
+    AGENT {
+        string agent_id PK
+        string crm_id
+        string name
+        timestamp active_since
+    }
+    LICENSE {
+        string license_no PK
+        string state_code FK
+        string license_type
+        date expires_at
+    }
+    STATE_DRE {
+        string state_code PK
+        string search_url
+        string adapter_version
+    }
+    ADAPTER_YAML {
+        string state_code PK
+        int tier
+        string flow
+    }
+    VERIFICATION_RUN {
+        string run_id PK
+        string agent_id FK
+        string state_code FK
+        string verdict
+        timestamp completed_at
+    }
+""", height=520)
+
+st.markdown(
+    "<span style='color:#94A3B8; font-size:0.88rem;'>"
+    "<b>Task fan-out:</b> when CRM emits <code>agent.activated</code>, we look up all "
+    "licenses tied to that agent and emit one workflow run per state. Same engine, "
+    "different adapter YAML per task, independent retries, independent ledger rows."
+    "</span>",
+    unsafe_allow_html=True,
+)
+
+divider()
+
 # ── Four pillars ─────────────────────────────────────────────────────────
 st.markdown("### Four pillars")
 c1, c2 = st.columns(2)

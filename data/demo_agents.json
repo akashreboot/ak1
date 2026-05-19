@@ -37,25 +37,6 @@
       "scenario": "happy_path"
     },
     {
-      "demo_id": "demo-CA-1",
-      "demo_label": "CA · Chris Porter",
-      "agent_id": "A-CA-CP01",
-      "name": { "full": "Chris Porter", "first": "Chris", "last": "Porter" },
-      "slug": "chris-porter",
-      "profile_url": "https://onereal.com/profile/chris-porter",
-      "fallback_profile_urls": [
-        "https://onereal.com/chris-porter",
-        "https://onereal.com/chris-porter/about"
-      ],
-      "expected": {
-        "state_code": "CA",
-        "state_full_name": "California",
-        "license_number_hint": "02145099",
-        "license_type": "Real Estate Salesperson"
-      },
-      "scenario": "happy_path"
-    },
-    {
       "demo_id": "demo-TX-1",
       "demo_label": "TX · Aahil Virani · single result",
       "agent_id": "A-TX-839005",
