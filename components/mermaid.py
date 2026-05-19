@@ -271,6 +271,29 @@ _INLINE_TPL = """<!doctype html>
 """
 
 
+def _safe_json_for_html(payload: str) -> str:
+    """JSON-encode `payload` so it's safe to embed inside an HTML <script> block.
+
+    The HTML5 parser terminates a <script> at the first literal '</script>' in
+    the byte stream, even inside a JS string. The popup HTML we embed contains
+    <script src="..."></script> tags for Mermaid + svg-pan-zoom, so without
+    escaping those </ sequences the inline script gets cut in half and the
+    rest of the payload spills out as body text.
+
+    Escaping '</' as '<\\/' keeps the HTML parser happy (it doesn't recognize
+    '<\\/script>' as a closing tag) and JavaScript still parses '\\/' as '/',
+    so the runtime string value is unchanged.
+
+    Also handle U+2028 / U+2029 which break literal strings in some engines.
+    """
+    return (
+        json.dumps(payload)
+        .replace("</", "<\\/")
+        .replace(" ", "\\u2028")
+        .replace(" ", "\\u2029")
+    )
+
+
 def mermaid(graph: str, height: int = 480) -> None:
     """Render a Mermaid diagram inside a Streamlit page.
 
@@ -281,6 +304,6 @@ def mermaid(graph: str, height: int = 480) -> None:
     popup_html = _POPUP_TPL.format(graph=graph)
     inline_html = _INLINE_TPL.format(
         graph=graph,
-        popup_html_json=json.dumps(popup_html),
+        popup_html_json=_safe_json_for_html(popup_html),
     )
     components.html(inline_html, height=height, scrolling=True)
