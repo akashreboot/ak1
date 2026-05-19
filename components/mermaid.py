@@ -1,11 +1,14 @@
-"""Mermaid diagram renderer for Streamlit with a full-window toggle.
+"""Mermaid diagram renderer for Streamlit with full-window + pan/zoom.
 
-Each diagram gets a ⛶ button in the top-right corner. Clicking it tries
-the browser's Fullscreen API; if the iframe sandbox blocks that, it falls
-back to a CSS-only expand that covers the iframe's visible area. ESC
-closes either mode.
+Each diagram gets a ⛶ button in the top-right corner. When expanded:
+  * Mouse wheel → zoom in / out (centered on cursor)
+  * Click + drag → pan
+  * '↻ Reset' button → restore default zoom and position
+  * ESC or close button → exit full-window
 
-CDN-loaded — no extra Python package required.
+When NOT expanded, the diagram behaves normally (page scroll passes through).
+
+Mermaid + svg-pan-zoom both CDN-loaded — no extra Python deps.
 """
 from __future__ import annotations
 
@@ -18,6 +21,7 @@ _MERMAID_TPL = """
 <head>
   <meta charset="utf-8">
   <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
   <style>
     html, body {{ margin:0; padding:0; background:transparent;
                   font-family:Inter, -apple-system, sans-serif;
@@ -29,57 +33,77 @@ _MERMAID_TPL = """
                 align-items:flex-start; min-height:200px; }}
     .mermaid svg {{ max-width:100% !important; height:auto !important; }}
 
-    .fs-btn {{
+    .toolbar {{
       position:absolute; top:8px; right:8px;
+      display:flex; gap:6px; z-index:10;
+    }}
+    .tb-btn {{
       background:rgba(34,211,238,0.12);
       border:1px solid rgba(34,211,238,0.5);
       color:#22D3EE;
       padding:5px 12px; border-radius:7px;
       font-size:0.78rem; font-weight:600;
       font-family:inherit; cursor:pointer;
-      z-index:10; transition:background 0.15s ease;
+      transition:background 0.15s ease;
     }}
-    .fs-btn:hover {{ background:rgba(34,211,238,0.25); }}
-    .fs-hint {{ position:absolute; bottom:8px; right:12px;
-                color:#475569; font-size:0.7rem;
-                font-family:JetBrains Mono, monospace; opacity:0; transition:opacity 0.2s; }}
-    .frame.expanded .fs-hint {{ opacity:1; }}
+    .tb-btn:hover {{ background:rgba(34,211,238,0.25); }}
+    .tb-btn.reset {{ display:none; }}
+    .frame.expanded .tb-btn.reset,
+    :fullscreen .tb-btn.reset,
+    :-webkit-full-screen .tb-btn.reset {{ display:inline-block; }}
+
+    .fs-hint {{ position:absolute; bottom:10px; right:16px;
+                color:#64748B; font-size:0.72rem;
+                font-family:JetBrains Mono, monospace; opacity:0;
+                transition:opacity 0.2s; pointer-events:none; }}
+    .frame.expanded .fs-hint,
+    :fullscreen .fs-hint,
+    :-webkit-full-screen .fs-hint {{ opacity:1; }}
 
     /* Native fullscreen styling */
     :fullscreen .frame,
     :-webkit-full-screen .frame {{
       width:100vw; height:100vh;
-      border:none; border-radius:0; padding:40px;
+      border:none; border-radius:0; padding:24px;
       display:flex; flex-direction:column;
     }}
     :fullscreen .mermaid,
     :-webkit-full-screen .mermaid {{
-      flex:1; align-items:center;
+      flex:1; align-items:stretch;
+      cursor:grab;
     }}
+    :fullscreen .mermaid:active,
+    :-webkit-full-screen .mermaid:active {{ cursor:grabbing; }}
     :fullscreen .mermaid svg,
     :-webkit-full-screen .mermaid svg {{
-      width:auto !important; height:auto !important;
-      max-width:95vw !important; max-height:88vh !important;
+      width:100% !important; height:100% !important;
+      max-width:none !important;
     }}
 
-    /* CSS fallback expand (covers the iframe area) */
+    /* CSS fallback expand */
     .frame.expanded {{
       position:fixed; inset:0; z-index:9999;
-      border:none; border-radius:0; padding:40px;
+      border:none; border-radius:0; padding:24px;
       display:flex; flex-direction:column;
     }}
-    .frame.expanded .mermaid {{ flex:1; align-items:center; }}
+    .frame.expanded .mermaid {{
+      flex:1; align-items:stretch; cursor:grab;
+    }}
+    .frame.expanded .mermaid:active {{ cursor:grabbing; }}
     .frame.expanded .mermaid svg {{
-      max-width:95% !important; max-height:88vh !important;
-      width:auto !important; height:auto !important;
+      width:100% !important; height:100% !important;
+      max-width:none !important;
     }}
   </style>
 </head>
 <body>
   <div class="frame" id="frame">
-    <button class="fs-btn" id="fsBtn" onclick="toggleFullscreen()">⛶  Full-window</button>
+    <div class="toolbar">
+      <button class="tb-btn reset" id="resetBtn" onclick="resetZoom()" title="Reset zoom and position">↻  Reset</button>
+      <button class="tb-btn" id="fsBtn" onclick="toggleFullscreen()">⛶  Full-window</button>
+    </div>
     <div class="mermaid">{graph}</div>
-    <div class="fs-hint">press ESC to close</div>
+    <div class="fs-hint">scroll to zoom · drag to pan · ESC to close</div>
   </div>
 
   <script>
@@ -102,51 +126,102 @@ _MERMAID_TPL = """
       flowchart:{{ curve:'basis', padding:14, useMaxWidth:true }},
     }});
 
+    let panZoom = null;
+
+    function _activatePanZoom() {{
+      const svg = document.querySelector('.mermaid svg');
+      if (!svg) {{ setTimeout(_activatePanZoom, 80); return; }}
+      // Remove Mermaid's max-width:100% so svg-pan-zoom can size freely
+      svg.style.maxWidth = 'none';
+      svg.style.width = '100%';
+      svg.style.height = '100%';
+      try {{
+        panZoom = svgPanZoom(svg, {{
+          zoomEnabled:        true,
+          controlIconsEnabled:false,
+          mouseWheelZoomEnabled: true,
+          panEnabled:         true,
+          fit:                true,
+          center:             true,
+          minZoom:            0.4,
+          maxZoom:            10,
+          zoomScaleSensitivity: 0.35,
+          dblClickZoomEnabled:true,
+          contain:            false,
+        }});
+      }} catch (e) {{ /* svg-pan-zoom failed silently — fullscreen still works */ }}
+    }}
+
+    function _destroyPanZoom() {{
+      if (panZoom) {{
+        try {{ panZoom.destroy(); }} catch (e) {{}}
+        panZoom = null;
+        // Reset SVG styles so it returns to inline size
+        const svg = document.querySelector('.mermaid svg');
+        if (svg) {{
+          svg.style.maxWidth = '100%';
+          svg.style.width = '';
+          svg.style.height = 'auto';
+        }}
+      }}
+    }}
+
+    function resetZoom() {{
+      if (panZoom) {{ panZoom.reset(); }}
+    }}
+
     function _setBtn(expanded) {{
-      const btn = document.getElementById('fsBtn');
-      btn.textContent = expanded ? '✕  Close (ESC)' : '⛶  Full-window';
+      document.getElementById('fsBtn').textContent =
+        expanded ? '✕  Close (ESC)' : '⛶  Full-window';
     }}
 
     function toggleFullscreen() {{
       const frame = document.getElementById('frame');
-      // If already expanded in either mode, close it.
       if (document.fullscreenElement) {{
         document.exitFullscreen();
         return;
       }}
       if (frame.classList.contains('expanded')) {{
+        _destroyPanZoom();
         frame.classList.remove('expanded');
         _setBtn(false);
         return;
       }}
-      // Try native fullscreen first.
       const req = frame.requestFullscreen
-                || frame.webkitRequestFullscreen
-                || document.documentElement.requestFullscreen;
+                || frame.webkitRequestFullscreen;
       if (req) {{
         Promise.resolve(req.call(frame))
-          .then(() => _setBtn(true))
+          .then(() => {{ _setBtn(true); setTimeout(_activatePanZoom, 120); }})
           .catch(() => {{
             frame.classList.add('expanded');
             _setBtn(true);
+            setTimeout(_activatePanZoom, 120);
           }});
       }} else {{
         frame.classList.add('expanded');
         _setBtn(true);
+        setTimeout(_activatePanZoom, 120);
       }}
     }}
 
     document.addEventListener('fullscreenchange', () => {{
-      _setBtn(!!document.fullscreenElement);
+      const inFs = !!document.fullscreenElement;
+      _setBtn(inFs);
+      if (!inFs) _destroyPanZoom();
     }});
 
     document.addEventListener('keydown', (e) => {{
       if (e.key === 'Escape') {{
         const frame = document.getElementById('frame');
         if (frame.classList.contains('expanded')) {{
+          _destroyPanZoom();
           frame.classList.remove('expanded');
           _setBtn(false);
         }}
+      }} else if (e.key === '0' && (document.fullscreenElement
+                  || document.getElementById('frame').classList.contains('expanded'))) {{
+        // '0' resets zoom — quick keyboard shortcut
+        resetZoom();
       }}
     }});
   </script>
@@ -158,8 +233,11 @@ _MERMAID_TPL = """
 def mermaid(graph: str, height: int = 480) -> None:
     """Render a Mermaid diagram inside a Streamlit page.
 
-    Each rendered diagram gets a ⛶ Full-window button. Native browser
-    fullscreen is tried first; if blocked by the iframe sandbox, a CSS
-    fallback covers the iframe's visible area. ESC closes either mode.
+    Each diagram gets a ⛶ Full-window button. When expanded:
+      * mouse-wheel zoom in/out
+      * click + drag to pan
+      * ↻ Reset button (or '0' key) restores default
+      * ESC closes
+    Inline view behaves normally — no zoom hijacking the page scroll.
     """
     components.html(_MERMAID_TPL.format(graph=graph), height=height, scrolling=True)
