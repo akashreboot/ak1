@@ -1,154 +1,120 @@
+"""Workflow walkthrough — one verification, end to end."""
 import time
 import streamlit as st
-from components.styles import page_setup, hero, card, divider, footer, REAL_CYAN, REAL_INDIGO, REAL_MUTED, REAL_MINT, REAL_AMBER, REAL_RED
-from components.diagrams import workflow_sequence_graph, failure_funnel_fig
+
+from components.styles import (
+    page_setup, hero, card, divider, footer,
+    REAL_CYAN, REAL_MUTED, REAL_MINT,
+)
 
 page_setup("Workflow Walkthrough", icon="🔄")
 
 hero(
-    eyebrow="03 · Workflow Walkthrough",
-    title_html='Watch a single verification go from <span class="gradient-text">CRM event</span> to <span class="glow-text">ledger entry</span>.',
-    subtitle=(
-        "This is the happy path for one California agent. Press Run to step through it live — every step is the "
-        "same activity that runs in production, with its own retry policy, timeout, and artifact."
-    ),
+    eyebrow="03 · Walkthrough",
+    title_html='One verification, <span class="gradient-text">CRM event → ledger row.</span>',
+    subtitle="The same 6 stages run for every state. Click Run to animate.",
 )
 
 st.write("")
 
-# Live demo
-demo_col, side_col = st.columns([1.6, 1])
+# ── Sample event payload ────────────────────────────────────────────────
+sample_agent = {
+    "agent_id":    "A-TX-839005",
+    "name":        "Aahil Virani",
+    "state":       "TX",
+    "license_no":  "839005",
+    "expires_at":  "2027-06-29",
+    "active_since":"2026-05-18T13:42:08Z",
+}
 
-with demo_col:
-    st.markdown("### Live trace: VerifyAgent workflow")
+with st.expander("📦  Incoming event payload (from CRM)", expanded=False):
+    st.json(sample_agent)
 
-    sample_agent = {
-        "agent_id": "A-CA-3304",
-        "name": "Jordan A. Rivera",
-        "state": "CA",
-        "license_no": "02145778",
-        "expires_at": "2027-03-14",
-        "onboarded_at": "2026-05-17T13:42:08Z",
-    }
+# ── 6-stage trace, matches the actual workflow code ─────────────────────
+STEPS = [
+    ("Receive event",                    "EventBridge → outbox → workflow start",       "Temporal",            0.5),
+    ("Fetch agent metadata",             "GET /internal/agents/A-TX-839005",            "CRM API",             0.4),
+    ("Fetch onereal profile",            "Playwright opens /profile/aahil-virani",      "Playwright",          1.6),
+    ("Cross-check CRM ↔ profile",        "name + state agree · license # = 839005",     "Verify",              0.3),
+    ("Resolve adapter + browser tier",   "tx.yaml @ v2 · tier T1 (Playwright)",         "Adapter",             0.3),
+    ("Drive TX TREC",                    "URL-param search → detail page",              "DRE / Playwright",    2.4),
+    ("Extract expiration",               "Expiration Date: 06/29/2027 → 2027-06-29",    "DRE",                 0.3),
+    ("Compare expirations",              "CRM 2027-06-29 == DRE 2027-06-29 ✓",          "Claude (Haiku)",      0.4),
+    ("Write ledger",                     "row #ver_88241 · screenshots in S3",          "Postgres + S3",       0.3),
+]
 
-    with st.expander("📦  Incoming event payload (from CRM)", expanded=True):
-        st.json(sample_agent)
+OWNER_COLORS = {
+    "Temporal":          "#A78BFA",
+    "CRM API":           "#60A5FA",
+    "Playwright":        "#22D3EE",
+    "Verify":            "#FBBF24",
+    "Adapter":           "#A78BFA",
+    "DRE / Playwright":  "#22D3EE",
+    "DRE":               "#22D3EE",
+    "Claude (Haiku)":    "#F472B6",
+    "Postgres + S3":     "#34D399",
+}
 
-    steps = [
-        ("Receive event",            "EventBridge → outbox → Temporal start",                   "Temporal",   0.6, "ok"),
-        ("Fetch agent metadata",     "GET /internal/agents/A-CA-3304 (200, 84ms)",              "Agent API",  0.4, "ok"),
-        ("Open JoinReal directory",  "Browserbase session bw-7a2c · TTFB 312ms",                "Playwright", 0.7, "ok"),
-        ("Search agent name",        "Stagehand.act('search 'Jordan A. Rivera'')",              "Stagehand",  0.9, "ok"),
-        ("Click matching listing",   "Top result · name+state match · confidence 0.97",         "Stagehand",  0.6, "ok"),
-        ("Verify state on JoinReal", "Listing state = 'California' ✓ matches CRM",              "Verify",     0.3, "ok"),
-        ("Open CA DRE eLicensing",   "https://www2.dre.ca.gov/PublicASP/pplinfo.asp",           "Playwright", 0.8, "ok"),
-        ("Submit license number",    "fill #lic_id='02145778' → submit",                        "Playwright", 0.9, "ok"),
-        ("Open agent listing",       "1 result · clicked detail page",                          "Playwright", 0.5, "ok"),
-        ("Extract expiration",       "Stagehand.extract('License Exp Date') → 2027-03-14",      "Stagehand",  0.8, "ok"),
-        ("Compare to CRM",           "DRE 2027-03-14 == CRM 2027-03-14 ✓",                      "Verify",     0.3, "ok"),
-        ("Write ledger entry",       "row #ver_88241 · s3://real-verify/...trace.zip",          "Postgres+S3", 0.4, "ok"),
-    ]
 
-    run = st.button("▶  Run verification", width="stretch")
-    log_box = st.container()
+def _row(t_label: str, owner: str, name: str, detail: str, accent: str) -> str:
+    oc = OWNER_COLORS.get(owner, REAL_CYAN)
+    return (
+        f"<div style='display:flex; gap:12px; padding:8px 12px; margin:4px 0; "
+        f"background:rgba(20,27,45,0.55); border-left:3px solid {accent}; border-radius:8px;'>"
+        f"<div style='font-family:JetBrains Mono; color:{REAL_MUTED}; flex:0 0 56px;'>{t_label}</div>"
+        f"<div style='flex:0 0 140px;'><span class='pill' "
+        f"style='background:{oc}22; color:{oc}; border:1px solid {oc}55;'>{owner}</span></div>"
+        f"<div style='flex:1;'><b style='color:#E2E8F0;'>{name}</b>"
+        f"<div style='color:{REAL_MUTED}; font-size:0.83rem; font-family:JetBrains Mono; margin-top:2px;'>{detail}</div>"
+        f"</div></div>"
+    )
 
-    if run:
-        progress = st.progress(0)
-        log = ""
-        total_time = 0.0
-        for i, (name, detail, owner, dur, status) in enumerate(steps, 1):
-            time.sleep(dur * 0.35)  # animate
-            total_time += dur
-            badge = "🟢" if status == "ok" else "🟡"
-            log += (
-                f"<div style='display:flex; gap:12px; padding:8px 12px; margin:4px 0; "
-                f"background:rgba(20,27,45,0.55); border-left:3px solid {REAL_MINT}; border-radius:8px;'>"
-                f"<div style='font-family:JetBrains Mono; color:{REAL_MUTED}; flex:0 0 60px;'>+{total_time:.1f}s</div>"
-                f"<div style='flex:0 0 110px;'><span class='pill pill-cyan'>{owner}</span></div>"
-                f"<div style='flex:1;'><b>{badge} {name}</b><br/>"
-                f"<span style='color:{REAL_MUTED}; font-size:0.85rem; font-family:JetBrains Mono;'>{detail}</span></div>"
-                f"</div>"
-            )
-            log_box.markdown(log, unsafe_allow_html=True)
-            progress.progress(i / len(steps))
-        st.success(f"✓ Verification complete in {total_time:.1f}s · result: MATCH · ledger row #ver_88241")
-    else:
-        # static preview
-        log = ""
-        for name, detail, owner, dur, status in steps:
-            log += (
-                f"<div style='display:flex; gap:12px; padding:8px 12px; margin:4px 0; "
-                f"background:rgba(20,27,45,0.55); border-left:3px solid rgba(99,102,241,0.4); border-radius:8px;'>"
-                f"<div style='font-family:JetBrains Mono; color:{REAL_MUTED}; flex:0 0 60px;'>—</div>"
-                f"<div style='flex:0 0 110px;'><span class='pill pill-cyan'>{owner}</span></div>"
-                f"<div style='flex:1;'><b>{name}</b><br/>"
-                f"<span style='color:{REAL_MUTED}; font-size:0.85rem; font-family:JetBrains Mono;'>{detail}</span></div>"
-                f"</div>"
-            )
-        log_box.markdown(log, unsafe_allow_html=True)
 
-with side_col:
-    st.markdown("### Step graph")
-    st.graphviz_chart(workflow_sequence_graph(), width="stretch")
+run = st.button("▶  Run verification", width="stretch")
+trace_slot = st.empty()  # ← FIX: empty() replaces in-place; container() appends
 
+if run:
+    progress = st.progress(0)
+    accumulated = ""
+    elapsed = 0.0
+    for i, (name, detail, owner, dur) in enumerate(STEPS, 1):
+        time.sleep(dur * 0.4)
+        elapsed += dur
+        accumulated += _row(f"+{elapsed:.1f}s", owner, f"🟢 {name}", detail, REAL_MINT)
+        trace_slot.markdown(accumulated, unsafe_allow_html=True)
+        progress.progress(i / len(STEPS))
+    st.success(f"✓ Verification complete in {elapsed:.1f}s · MATCH · ledger row #ver_88241")
+else:
+    # Static preview
+    preview = ""
+    for name, detail, owner, _ in STEPS:
+        preview += _row("—", owner, name, detail, "rgba(99,102,241,0.4)")
+    trace_slot.markdown(preview, unsafe_allow_html=True)
+
+divider()
+
+# ── Why this is a workflow, not a script ────────────────────────────────
+c1, c2 = st.columns(2)
+with c1:
     card(
         "Why this is a workflow, not a script",
-        """
-        Each numbered step is a <b>Temporal activity</b>. Activities have:
-        <ul style="margin:6px 0; padding-left:18px;">
-            <li>Their own retry policy (exponential, jittered)</li>
-            <li>Their own timeout (no zombie browser sessions)</li>
-            <li>Their own idempotency contract</li>
-        </ul>
-        If step 8 fails, step 1–7 don't re-run. Temporal stores their results.
-        """,
+        "Each step is a Temporal activity with its own retry policy, timeout, and idempotency "
+        "contract. If step 7 fails, steps 1–6 don't rerun.",
         pills=[("Durable", "violet"), ("Replayable", "mint")],
     )
-
-divider()
-
-st.markdown("### What it looks like in aggregate")
-fcol, kcol = st.columns([1.5, 1])
-with fcol:
-    st.markdown("##### Funnel — last 10,000 events (synthetic)")
-    st.plotly_chart(failure_funnel_fig(), width="stretch", config={"displayModeBar": False})
-
-with kcol:
-    st.markdown("##### Per-step SLOs")
-    st.markdown(
-        f"""
-        <div class="card">
-            <table style="width:100%; color:#CBD5E1; font-size:0.9rem;">
-                <tr style="color:{REAL_CYAN}; text-align:left;"><th>Step</th><th>p50</th><th>p95</th></tr>
-                <tr><td>Fetch metadata</td><td>120ms</td><td>380ms</td></tr>
-                <tr><td>JoinReal verify</td><td>9.4s</td><td>22s</td></tr>
-                <tr><td>DRE verify (CA)</td><td>14.1s</td><td>38s</td></tr>
-                <tr><td>Vision fallback</td><td>22s</td><td>1m 40s</td></tr>
-                <tr><td>Ledger write</td><td>40ms</td><td>110ms</td></tr>
-            </table>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown(
-        f"""
-        <div class="card">
-            <h3 style="margin:0 0 8px 0;">Failure budget</h3>
-            <div style="color:#CBD5E1;">
-                We allow <b>0.6% of verifications</b> to require human review on a 30-day rolling window.
-                Above that, the system stops auto-publishing and pages the on-call.
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-divider()
-
-c1, c2 = st.columns([1, 1])
-with c1:
-    st.page_link("pages/2_System_Architecture.py", label="← System Architecture", width="stretch")
 with c2:
-    st.page_link("pages/4_Tech_Stack.py", label="Next: Tech Stack & Why →", width="stretch")
+    card(
+        "Per-step SLOs",
+        "p95 budget: 90 seconds end-to-end. Profile fetch ≤ 3s · DRE drive ≤ 5s · ledger write ≤ 100ms. "
+        "Spans are emitted per activity to Datadog.",
+        pills=[("p95 < 90s", "cyan")],
+    )
+
+st.write("")
+nav1, nav2 = st.columns(2)
+with nav1:
+    st.page_link("pages/2_System_Architecture.py", label="← Architecture", width="stretch")
+with nav2:
+    st.page_link("pages/4_Tech_Stack.py", label="Next: Stack →", width="stretch")
 
 footer()
