@@ -1,0 +1,453 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Tech Stack — Study Guide</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  :root {
+    --ink:#0B1220; --ink-soft:#1F2937; --muted:#64748B; --rule:#E2E8F0;
+    --cyan:#06B6D4; --cyan-deep:#0E7490; --violet:#8B5CF6;
+    --mint:#10B981; --amber:#F59E0B; --red:#EF4444;
+    --paper:#FAFAF9; --paper-2:#FFFFFF; --code:#F1F5F9;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+         background:var(--paper); color:var(--ink-soft); line-height:1.6; }
+  .layout { display:grid; grid-template-columns:240px 1fr; max-width:1280px;
+            margin:0 auto; gap:32px; padding:32px 24px 64px; }
+  @media (max-width:880px) {
+    .layout { grid-template-columns:1fr; }
+    .toc { position:static; max-height:none; }
+  }
+  .toc { position:sticky; top:24px; align-self:start;
+         background:var(--paper-2); border:1px solid var(--rule);
+         border-radius:10px; padding:14px 18px; max-height:calc(100vh - 48px);
+         overflow-y:auto; font-size:0.86rem; }
+  .toc .lbl { color:var(--cyan-deep); font-size:0.7rem;
+              text-transform:uppercase; letter-spacing:0.12em;
+              font-weight:700; margin-bottom:8px; }
+  .toc a { display:block; color:var(--ink-soft); text-decoration:none;
+           padding:5px 0; border-left:2px solid transparent; padding-left:10px;
+           margin-left:-12px; transition:all 0.1s; }
+  .toc a:hover { color:var(--cyan-deep); border-left-color:var(--cyan); }
+  .toc .min { color:var(--muted); font-size:0.74rem; margin-left:6px; }
+
+  .content { max-width:780px; }
+  .eyebrow { color:var(--cyan); font-size:0.72rem; font-weight:700;
+             text-transform:uppercase; letter-spacing:0.14em; }
+  h1 { font-size:2rem; margin:8px 0 8px; color:var(--ink); line-height:1.2; }
+  .subtitle { color:var(--muted); font-size:1.05rem; margin-bottom:8px; }
+  .reading-time { color:var(--muted); font-size:0.85rem;
+                  font-family:'JetBrains Mono',monospace; }
+  h2 { font-size:1.35rem; margin:42px 0 8px; color:var(--ink);
+       padding-bottom:6px; border-bottom:1px solid var(--rule); }
+  h2 .min { color:var(--muted); font-size:0.78rem; font-weight:500; margin-left:8px; }
+  h3 { font-size:1.05rem; margin:22px 0 6px; color:var(--ink-soft); }
+  h3 .pill { font-size:0.7rem; vertical-align:middle; margin-left:8px; }
+  p { margin:8px 0; }
+
+  table { width:100%; border-collapse:collapse; font-size:0.9rem; margin:10px 0 16px;
+          background:var(--paper-2); border:1px solid var(--rule); border-radius:8px;
+          overflow:hidden; }
+  th { background:var(--ink); color:white; text-align:left; padding:10px 12px;
+       font-weight:600; font-size:0.82rem; }
+  td { padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  tr:last-child td { border-bottom:0; }
+  td code, p code, li code {
+    background:var(--code); padding:1px 6px; border-radius:4px;
+    font-family:'JetBrains Mono','Courier New',monospace; font-size:0.85em;
+    color:#0F172A; }
+
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px;
+          font-size:0.72rem; font-weight:600; }
+  .pill-now   { background:#10b98122; color:#047857; border:1px solid #10b98155; }
+  .pill-alt   { background:#64748b22; color:#475569; border:1px solid #64748b55; }
+  .pill-rej   { background:#ef444422; color:#b91c1c; border:1px solid #ef444455; }
+  .pill-cyan  { background:#06b6d422; color:#0e7490; border:1px solid #06b6d455; }
+  .pill-violet{ background:#8b5cf622; color:#5b21b6; border:1px solid #8b5cf655; }
+
+  .users { background:#f8fafc; border:1px solid var(--rule);
+           border-radius:8px; padding:10px 14px; margin:10px 0;
+           font-size:0.85rem; color:var(--muted); }
+  .users b { color:var(--cyan-deep); }
+
+  pre { background:#0F172A; color:#E2E8F0; padding:14px 16px; border-radius:8px;
+        overflow-x:auto; font-family:'JetBrains Mono',monospace; font-size:0.82rem;
+        line-height:1.5; margin:10px 0 16px; }
+  pre .com { color:#64748B; }
+  pre .kw  { color:#A78BFA; }
+  pre .str { color:#86EFAC; }
+  pre .num { color:#FCD34D; }
+
+  .callout { background:#fef3c7; border-left:4px solid var(--amber);
+             padding:12px 16px; border-radius:6px; margin:14px 0;
+             color:#78350f; font-size:0.92rem; }
+  .callout b { color:#92400e; }
+  .footer { color:var(--muted); font-size:0.8rem; margin-top:60px;
+            border-top:1px solid var(--rule); padding-top:16px; }
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <!-- ============== TABLE OF CONTENTS (sticky sidebar) ============== -->
+  <aside class="toc">
+    <div class="lbl">Contents · ~15 min</div>
+    <a href="#overview">Overview <span class="min">2m</span></a>
+    <a href="#languages">Languages used <span class="min">1m</span></a>
+    <a href="#yaml">YAML — config vs code <span class="min">2m</span></a>
+    <a href="#python">Python <span class="min">1m</span></a>
+    <a href="#browsers">Browser automation <span class="min">2m</span></a>
+    <a href="#workflow">Workflow orchestration <span class="min">1m</span></a>
+    <a href="#llm">LLM (Anthropic) <span class="min">1m</span></a>
+    <a href="#data">Data layer <span class="min">1m</span></a>
+    <a href="#events">Event bus <span class="min">1m</span></a>
+    <a href="#observability">UI &amp; observability <span class="min">1m</span></a>
+    <a href="#summary">Why this whole stack <span class="min">2m</span></a>
+  </aside>
+
+  <main class="content">
+
+    <div class="eyebrow">Study guide</div>
+    <h1>Tech stack — what we used and why</h1>
+    <p class="subtitle">For each choice: what it is, what we rejected, who uses it in production.</p>
+    <p class="reading-time">⏱ ~15 minute read</p>
+
+    <!-- =================== OVERVIEW =================== -->
+    <h2 id="overview">Overview <span class="min">· 2 min</span></h2>
+    <p>
+      The system is a verification engine: it picks up a CRM event, fetches the agent's public profile,
+      drives the right state's licensing site, and writes a verdict to a ledger. That sounds simple, but
+      it has four sharp constraints:
+    </p>
+    <ul>
+      <li>50 state sites, every one different</li>
+      <li>Some sites have anti-bot defenses, some don't</li>
+      <li>Site UIs change without notice</li>
+      <li>Cost has to stay flat as we scale — can't be linear in operator-hours</li>
+    </ul>
+    <p>
+      Those constraints shape the stack: <b>durable orchestration</b> (so transient failures don't lose work),
+      <b>tiered browser runners</b> (cheap by default, escalate when the site fights back),
+      <b>AI as a fallback</b> (so the bill doesn't explode), and <b>config-as-data</b> (so a new state isn't
+      a new deploy).
+    </p>
+
+    <h3>The stack at a glance</h3>
+    <table>
+      <tr><th>Concern</th><th>Choice</th><th>Used as</th></tr>
+      <tr><td>Workflow engine</td><td>Temporal Cloud (prod), generator-saga (proto)</td><td>orchestration</td></tr>
+      <tr><td>Browser T1</td><td>Playwright (Chromium)</td><td>default automation</td></tr>
+      <tr><td>Browser T2</td><td>Camoufox (Firefox + C++ stealth)</td><td>Cloudflare-light states</td></tr>
+      <tr><td>Browser T3</td><td>Browserbase</td><td>managed browsers + CAPTCHA</td></tr>
+      <tr><td>LLM</td><td>Anthropic Claude (Opus + Haiku)</td><td>fallback extraction + classify</td></tr>
+      <tr><td>Compute</td><td>AWS Fargate (EKS)</td><td>stateless workers</td></tr>
+      <tr><td>Trigger bus</td><td>AWS EventBridge</td><td>CRM → workflow</td></tr>
+      <tr><td>Ledger</td><td>Postgres (RDS), SQLite locally</td><td>auditable verifications</td></tr>
+      <tr><td>Artifacts</td><td>S3 + CRR</td><td>screenshots + HTML snapshots</td></tr>
+      <tr><td>Selector cache</td><td>Redis (ElastiCache)</td><td>skip DOM scan on hot paths</td></tr>
+      <tr><td>HITL channel</td><td>Slack webhook</td><td>operator alerts + actions</td></tr>
+      <tr><td>Observability</td><td>Datadog</td><td>metrics, traces, logs</td></tr>
+      <tr><td>Adapter config</td><td>YAML (one file per state)</td><td>per-state selectors + flow</td></tr>
+      <tr><td>Demo / deck</td><td>Streamlit + Mermaid</td><td>interactive presentation</td></tr>
+    </table>
+
+    <!-- =================== LANGUAGES =================== -->
+    <h2 id="languages">Languages used <span class="min">· 1 min</span></h2>
+    <table>
+      <tr><th>Language</th><th>Where it lives</th><th>Why</th></tr>
+      <tr>
+        <td><b>Python 3.11+</b></td>
+        <td>All workflow code, the runner, the disambiguator, the router, activities, the Streamlit demo</td>
+        <td>Playwright's official binding is Python; mature LLM SDKs; team familiarity; rich data tooling</td>
+      </tr>
+      <tr>
+        <td><b>YAML</b></td>
+        <td>Per-state adapters in <code>verifier/adapters/*.yaml</code></td>
+        <td>Declarative, human-readable, diffable; non-engineers can review changes</td>
+      </tr>
+      <tr>
+        <td><b>SQL</b></td>
+        <td>Ledger queries against Postgres / SQLite</td>
+        <td>Auditable, indexable, joinable; every Ops tool reads SQL</td>
+      </tr>
+      <tr>
+        <td><b>HTML / CSS / JavaScript</b></td>
+        <td>Streamlit pages render HTML; embedded Mermaid diagrams render via JS; the Full-window popup runs JS</td>
+        <td>Universal browser support; no install for the audience</td>
+      </tr>
+      <tr>
+        <td><b>Bash / PowerShell</b></td>
+        <td>Local run scripts, CI steps</td>
+        <td>Glue. Nothing exotic.</td>
+      </tr>
+    </table>
+
+    <!-- =================== YAML vs Python =================== -->
+    <h2 id="yaml">YAML — config vs code <span class="min">· 2 min</span></h2>
+    <p>
+      The most common question we get: <b>"if state flows are YAML, where does the logic live?"</b>
+      Short answer: <b>YAML is declarative data; Python is the logic that reads it.</b> The YAML is a recipe;
+      Python is the chef.
+    </p>
+
+    <h3>What's in a YAML adapter</h3>
+    <p>Selectors. URLs. A flow flag. The browser tier. <em>No logic.</em></p>
+    <pre><span class="com"># verifier/adapters/wa.yaml — declarative only</span>
+<span class="kw">state_code</span>: WA
+<span class="kw">anti_bot_tier</span>: T2
+<span class="kw">dre</span>:
+  <span class="kw">search_url</span>: https://professions.dol.wa.gov/s/license-lookup
+  <span class="kw">flow</span>: multi_page_detail
+  <span class="kw">disambiguation_required</span>: <span class="num">true</span>
+  <span class="kw">selectors</span>:
+    <span class="kw">license_input</span>:
+      - <span class="str">"input#License_Number"</span>
+      - <span class="str">"lightning-input[data-label*='License'] input"</span>
+    <span class="kw">detail_expiration</span>:
+      - <span class="str">"text=/Expiration Date:?\s*([A-Za-z]+ \d{1,2},? \d{4})/i"</span></pre>
+
+    <h3>Where logic lives</h3>
+    <table>
+      <tr><th>Logic concern</th><th>Lives in</th><th>Why not YAML?</th></tr>
+      <tr>
+        <td>Reading the YAML and dispatching</td>
+        <td><code>verifier/adapter_loader.py</code> (Python)</td>
+        <td>YAML can't loop, branch, or call functions</td>
+      </tr>
+      <tr>
+        <td>Driving the browser with fallback selectors</td>
+        <td><code>verifier/playwright_runner.py</code> (Python)</td>
+        <td>Needs try/except, retries, screenshot timing</td>
+      </tr>
+      <tr>
+        <td>Disambiguating multi-row results</td>
+        <td><code>verifier/disambiguator.py</code> (Python)</td>
+        <td>Token math, scoring, thresholds, decisions</td>
+      </tr>
+      <tr>
+        <td>Tier promotion / demotion</td>
+        <td><code>verifier/anti_bot_router.py</code> (Python)</td>
+        <td>Stateful — tracks recent outcomes per state</td>
+      </tr>
+      <tr>
+        <td>Comparing CRM ↔ DRE expiration</td>
+        <td><code>verifier/activities.py</code> + Claude Haiku</td>
+        <td>Date formats vary; LLM classifies robustly</td>
+      </tr>
+    </table>
+
+    <div class="callout">
+      <b>The split is the point.</b> Adapter authors edit YAML — selectors, URLs, expected types.
+      Engineers edit Python — retry policies, disambiguation rules, router state. A bad selector
+      change can be reverted with a YAML revert. A bad algorithm change goes through code review.
+    </div>
+
+    <!-- =================== PYTHON =================== -->
+    <h2 id="python">Python <span class="min">· 1 min</span></h2>
+    <h3>What it is <span class="pill pill-now">In use</span></h3>
+    <p>General-purpose language; the runtime for every line of logic in this system.</p>
+    <table>
+      <tr><th>Alternatives</th><th>Why not</th></tr>
+      <tr><td>TypeScript / Node</td><td>Excellent Playwright support but weaker LLM SDKs and weaker data tooling for the ledger / analytics path</td></tr>
+      <tr><td>Go</td><td>Great for stateless workers, but Playwright bindings are unofficial and AI SDKs less mature</td></tr>
+      <tr><td>Rust</td><td>Overkill for I/O-bound workloads; team velocity matters more than per-call latency here</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Anthropic (SDK), Stripe (Python on the data plane), Instacart, Dropbox, Reddit, NASA (operational tooling).</div>
+
+    <!-- =================== BROWSERS =================== -->
+    <h2 id="browsers">Browser automation <span class="min">· 2 min</span></h2>
+
+    <h3>Playwright <span class="pill pill-now">T1 — default</span></h3>
+    <p>
+      Cross-browser automation library from Microsoft. Drives real Chromium, Firefox, or WebKit via a
+      stable async protocol. We use the synchronous Python API for our workers.
+    </p>
+    <pre><span class="com"># Real example from the runner</span>
+<span class="kw">with</span> sync_playwright() <span class="kw">as</span> pw:
+    browser = pw.chromium.launch(headless=<span class="num">True</span>)
+    page = browser.new_context().new_page()
+    page.goto(url, wait_until=<span class="str">"domcontentloaded"</span>)
+    page.fill(selector, license_no)
+    page.click(<span class="str">"button[type='submit']"</span>)</pre>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>Selenium</td><td><span class="pill pill-rej">Rejected</span></td><td>Older, less reliable async model, weaker stealth, more flaky in CI</td></tr>
+      <tr><td>Puppeteer</td><td><span class="pill pill-alt">Considered</span></td><td>Chrome-only; Node-only — we're a Python shop</td></tr>
+      <tr><td>Cypress</td><td><span class="pill pill-rej">Rejected</span></td><td>For end-to-end testing of your own app, not third-party sites; sandbox limitations</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Microsoft, Disney+, VS Code, BBC, Hulu, OpenAI (internal automation), TestGrid, Bright Data.</div>
+
+    <h3>Camoufox <span class="pill pill-now">T2 — stealth</span></h3>
+    <p>
+      A fork of Firefox with C++-level patches that defeat browser fingerprinting (canvas, WebGL, audio,
+      timezone, fonts). Open-source. Same Playwright API as plain Firefox.
+    </p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>playwright-stealth plugin</td><td><span class="pill pill-alt">Considered</span></td><td>JS-level patches only — modern detection scripts beat it</td></tr>
+      <tr><td>undetected-chromedriver</td><td><span class="pill pill-rej">Rejected</span></td><td>Selenium-based; same patching problem</td></tr>
+      <tr><td>Patchright</td><td><span class="pill pill-alt">Considered</span></td><td>Patched Playwright fork; smaller community than Camoufox</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Scraping firms, Bright Data customers, indie OSINT tooling. Smaller community than Playwright, but the only credible OSS option for serious anti-bot bypass.</div>
+
+    <h3>Browserbase <span class="pill pill-now">T3 — managed</span></h3>
+    <p>
+      Hosted browser service. You hit their API; they give you a remote Chromium with residential IP,
+      CAPTCHA-solving plug-ins, and built-in observability. Costs ~$0.04/run.
+    </p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>Bright Data Browser API</td><td><span class="pill pill-alt">Considered</span></td><td>Comparable; Browserbase has nicer DX and recordings for free</td></tr>
+      <tr><td>Self-hosted Selenium Grid + proxies</td><td><span class="pill pill-rej">Rejected</span></td><td>Massive ops overhead; we'd need to maintain a fleet for &lt;10% of traffic</td></tr>
+      <tr><td>ScrapingBee / ScraperAPI</td><td><span class="pill pill-rej">Rejected</span></td><td>HTTP-only — can't run a multi-step browser session</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Anthropic (Computer Use demos), Cognition / Devin, Vercel v0, Stagehand, Browser Use.</div>
+
+    <!-- =================== WORKFLOW =================== -->
+    <h2 id="workflow">Workflow orchestration <span class="min">· 1 min</span></h2>
+    <h3>Temporal <span class="pill pill-now">Production target</span></h3>
+    <p>
+      Durable workflow engine. You write workflows in normal Python; Temporal handles retries, replays,
+      timeouts, and signals. A worker crash mid-run resumes on a new worker without losing progress.
+      Our prototype uses an in-process generator-based saga that mirrors the same retry/replay semantics.
+    </p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>AWS Step Functions</td><td><span class="pill pill-alt">Real contender</span></td><td>JSON-defined workflows feel clunkier; great for AWS-natives though</td></tr>
+      <tr><td>Airflow</td><td><span class="pill pill-rej">Rejected</span></td><td>Built for batch DAGs, not per-event durable workflows</td></tr>
+      <tr><td>Celery</td><td><span class="pill pill-rej">Rejected</span></td><td>Task queue, not a workflow engine; no replay or durable state</td></tr>
+      <tr><td>Hatchet, Inngest, Trigger.dev</td><td><span class="pill pill-alt">Considered</span></td><td>Younger; Temporal has 7+ years of battle-testing at scale</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Snap, Coinbase, Doordash, Stripe, Datadog, Yum! Brands, HashiCorp, Uber (original authors built Cadence which became Temporal).</div>
+
+    <!-- =================== LLM =================== -->
+    <h2 id="llm">LLM — Anthropic Claude <span class="min">· 1 min</span></h2>
+    <p>
+      Two roles: <b>Haiku</b> (fast, cheap) for the expiration-date classifier on every run; <b>Opus</b>
+      (smart, expensive) for the HTML-extract fallback when CSS selectors miss (~5% of runs). Tomorrow:
+      Opus vision for screenshot-based extraction.
+    </p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>OpenAI GPT-5</td><td><span class="pill pill-alt">Comparable</span></td><td>Quality similar; Claude has stronger tool-use ergonomics and we already use Anthropic SDK</td></tr>
+      <tr><td>Google Gemini</td><td><span class="pill pill-alt">Considered</span></td><td>Strong vision, weaker general SDK; would re-evaluate for vision fallback</td></tr>
+      <tr><td>Open-weights (Llama, Mistral)</td><td><span class="pill pill-rej">Rejected</span></td><td>Self-hosting cost + ops overhead doesn't beat managed for our volume</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Anthropic (obviously), Notion, Sourcegraph (Cody), Asana, Quora, Slack (AI features), Zoom, DuckDuckGo.</div>
+
+    <!-- =================== DATA =================== -->
+    <h2 id="data">Data layer <span class="min">· 1 min</span></h2>
+
+    <h3>Postgres (RDS) <span class="pill pill-now">Ledger</span></h3>
+    <p>The verification ledger. Indexed on <code>agent_id</code>, <code>run_id</code>, <code>state_code</code>, <code>verdict</code>. Multi-AZ. PITR.</p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th></tr>
+      <tr><td>DynamoDB</td><td><span class="pill pill-rej">Rejected</span> — joins matter for Ops; SQL is the lingua franca of audit</td></tr>
+      <tr><td>MySQL / MariaDB</td><td><span class="pill pill-alt">Fine</span> — Postgres has stronger JSON + window function support</td></tr>
+      <tr><td>SQLite (prod)</td><td><span class="pill pill-rej">Rejected</span> — local only; we use it for the prototype</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> basically everyone. Stripe, Apple, Instagram, Spotify, Reddit, GitHub.</div>
+
+    <h3>S3 + Cross-Region Replication <span class="pill pill-now">Artifacts</span></h3>
+    <p>Screenshots, HTML snapshots, run traces. Cheap, durable, replicated to a second region for DR.</p>
+    <div class="users"><b>Used by:</b> Netflix, Airbnb, Pinterest, every AWS-native company on earth.</div>
+
+    <h3>Redis (ElastiCache) <span class="pill pill-now">Selector cache</span></h3>
+    <p>
+      TTL'd cache of which selector worked for which state recently. Hot path skips the DOM scan and
+      uses the cached one — falls through to the multi-selector list if it misses.
+    </p>
+    <div class="users"><b>Used by:</b> Twitter, GitHub, Pinterest, Stack Overflow, Snapchat.</div>
+
+    <!-- =================== EVENTS =================== -->
+    <h2 id="events">Event bus — AWS EventBridge <span class="min">· 1 min</span></h2>
+    <p>
+      Schema-validated bus that delivers CRM events (<code>agent.activated</code>, <code>license.updated</code>)
+      to the workflow trigger. Has a built-in archive + replay for back-fill scenarios.
+    </p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th><th>Why not</th></tr>
+      <tr><td>SNS + SQS</td><td><span class="pill pill-alt">Considered</span></td><td>No schema registry, no built-in replay window</td></tr>
+      <tr><td>Apache Kafka</td><td><span class="pill pill-rej">Rejected</span></td><td>Massive ops overhead for one event topic at our volume</td></tr>
+      <tr><td>Confluent Cloud</td><td><span class="pill pill-rej">Rejected</span></td><td>Cost-prohibitive for our throughput</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Capital One, Liberty Mutual, EA, Salesforce (their own platform).</div>
+
+    <!-- =================== OBSERVABILITY =================== -->
+    <h2 id="observability">UI &amp; observability <span class="min">· 1 min</span></h2>
+
+    <h3>Streamlit <span class="pill pill-now">Demo + deck</span></h3>
+    <p>
+      Python-first web framework. We use it because the deck and the working build are <em>the same app</em> —
+      live demo pages call the same workflow code that production would run.
+    </p>
+    <div class="users"><b>Used by:</b> Uber (internal dashboards), Tesla, Snowflake (data apps), Goldman Sachs, hundreds of ML teams for prototypes.</div>
+
+    <h3>Mermaid <span class="pill pill-now">Diagrams</span></h3>
+    <p>
+      Markdown-style diagram language that renders to SVG in the browser. We use it for flowcharts and
+      the ER schema. Cheap to author, scales nicely, includes pan/zoom via svg-pan-zoom in our full-window popup.
+    </p>
+    <div class="users"><b>Used by:</b> GitHub (native rendering in READMEs), Notion (via plugin), GitLab, Bitbucket.</div>
+
+    <h3>Slack webhook <span class="pill pill-now">HITL</span></h3>
+    <p>Incoming-webhook message with interactive action buttons. The button click resolves a durable workflow signal — the operator's decision moves the saga forward.</p>
+
+    <h3>Datadog <span class="pill pill-now">Telemetry</span></h3>
+    <p>Spans per activity, golden-signal dashboards per state, error-budget burn-rate alerts. We don't manage observability infra ourselves.</p>
+    <table>
+      <tr><th>Alternative</th><th>Verdict</th></tr>
+      <tr><td>Grafana + Tempo + Loki</td><td><span class="pill pill-alt">OSS but ops-heavy</span></td></tr>
+      <tr><td>New Relic / Honeycomb</td><td><span class="pill pill-alt">Comparable</span></td></tr>
+      <tr><td>CloudWatch only</td><td><span class="pill pill-rej">Insufficient</span> — weak distributed-tracing story</td></tr>
+    </table>
+    <div class="users"><b>Used by:</b> Samsung, Comcast, 21st Century Fox, Coinbase, Peloton, Whole Foods.</div>
+
+    <!-- =================== SUMMARY =================== -->
+    <h2 id="summary">Why this whole stack, in one paragraph <span class="min">· 2 min</span></h2>
+    <p>
+      <b>Determinism cheap, AI on fallback.</b> Selectors do 95% of the work; LLMs only fire when the DOM
+      drifts. <b>Stateless workers, durable workflow state.</b> Pods can die and the workflow doesn't.
+      <b>Config-as-data, not config-as-code.</b> Adapter changes are YAML diffs; engine changes are
+      Python code review. <b>Managed when reasonable.</b> Pay for boring infra so engineer-hours go
+      into the verifier itself, not the queue or the metrics pipeline. <b>Optionality preserved.</b>
+      Every choice is swappable without rewriting the workflow — Temporal can become Step Functions,
+      Camoufox can become Playwright with a stealth plugin, Claude can become a comparable LLM.
+    </p>
+
+    <h3>Three sentences worth memorizing</h3>
+    <ol>
+      <li><i>It has to be cheap when nothing's wrong, and graceful when something is.</i></li>
+      <li><i>Adapter-as-data, not adapter-as-code.</i></li>
+      <li><i>AI is a fallback, not the headline.</i></li>
+    </ol>
+
+    <div class="footer">
+      Study guide · v2 prototype · vendor pages link out to the canonical docs.
+    </div>
+  </main>
+</div>
+
+<script>
+  // Highlight the active TOC link as the user scrolls
+  const sections = Array.from(document.querySelectorAll('h2[id]'));
+  const links = Array.from(document.querySelectorAll('.toc a[href^="#"]'));
+  function onScroll() {
+    const y = window.scrollY + 80;
+    let active = sections[0];
+    for (const s of sections) {
+      if (s.offsetTop <= y) active = s; else break;
+    }
+    links.forEach(a => {
+      a.style.color = a.getAttribute('href') === '#' + active.id ? '#0E7490' : '';
+      a.style.borderLeftColor = a.getAttribute('href') === '#' + active.id ? '#06B6D4' : '';
+      a.style.fontWeight = a.getAttribute('href') === '#' + active.id ? '600' : '';
+    });
+  }
+  window.addEventListener('scroll', onScroll);
+  onScroll();
+</script>
+</body>
+</html>
