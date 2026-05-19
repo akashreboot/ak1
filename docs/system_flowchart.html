@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agent Verification — System Flowchart</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --ink:#0B1220; --ink-soft:#1F2937; --muted:#64748B; --rule:#E2E8F0;
+    --cyan:#06B6D4; --cyan-deep:#0E7490;
+    --violet:#8B5CF6; --mint:#10B981; --amber:#F59E0B; --red:#EF4444;
+    --paper:#FAFAF9;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Inter,sans-serif;
+         background:var(--paper); color:var(--ink-soft); line-height:1.55; }
+  .wrap { max-width:1100px; margin:0 auto; padding:36px 28px 80px; }
+  .eyebrow { color:var(--cyan); font-size:0.72rem; font-weight:700;
+             text-transform:uppercase; letter-spacing:0.14em; margin-bottom:8px; }
+  h1 { font-size:2rem; margin:0 0 8px; color:var(--ink); }
+  h2 { font-size:1.2rem; margin:32px 0 10px; color:var(--cyan-deep);
+       border-bottom:1px solid var(--rule); padding-bottom:6px; }
+  h3 { font-size:1rem; margin:18px 0 8px; color:var(--ink); }
+  p { margin:8px 0; color:var(--ink-soft); }
+  .subtitle { color:var(--muted); font-size:1rem; margin-bottom:24px; }
+  .panel { background:white; border:1px solid var(--rule); border-radius:12px;
+           padding:18px 22px; margin:14px 0; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  table { width:100%; border-collapse:collapse; font-size:0.92rem; margin:8px 0 12px; }
+  th { background:var(--ink); color:white; text-align:left; padding:9px 12px;
+       font-weight:600; font-size:0.85rem; }
+  td { padding:9px 12px; border-bottom:1px solid var(--rule); vertical-align:top; }
+  td.tag { font-family:'JetBrains Mono','Courier New',monospace;
+           color:var(--cyan-deep); font-size:0.82rem; white-space:nowrap; }
+  .pill { display:inline-block; padding:2px 9px; border-radius:999px;
+          font-size:0.72rem; font-weight:600; }
+  .pill-now { background:#10b98122; color:#047857; border:1px solid #10b98155; }
+  .pill-fut { background:#8b5cf622; color:#5b21b6; border:1px solid #8b5cf655; }
+  .pill-det { background:#06b6d422; color:#0e7490; border:1px solid #06b6d455; }
+  .grid { display:grid; gap:12px; }
+  .grid-2 { grid-template-columns:1fr 1fr; }
+  .grid-3 { grid-template-columns:repeat(3, 1fr); }
+  @media (max-width:780px) { .grid-2, .grid-3 { grid-template-columns:1fr; } }
+  .card-tile { padding:14px 16px; border-radius:10px; border:1px solid var(--rule); }
+  .card-cyan   { background:#06b6d40d; border-color:#06b6d455; }
+  .card-violet { background:#8b5cf60d; border-color:#8b5cf655; }
+  .card-mint   { background:#10b9810d; border-color:#10b98155; }
+  .card-amber  { background:#f59e0b0d; border-color:#f59e0b55; }
+  .card-tile .lbl { color:var(--cyan-deep); font-size:0.7rem; font-weight:700;
+                    text-transform:uppercase; letter-spacing:0.12em; }
+  .card-tile .val { color:var(--ink); font-weight:700; font-size:1.05rem; margin-top:3px; }
+  .card-tile .sub { color:var(--muted); font-size:0.83rem; margin-top:4px; }
+  .mermaid { background:white; padding:8px; border-radius:10px;
+             border:1px solid var(--rule); }
+  code { background:#f1f5f9; padding:1px 6px; border-radius:4px;
+         font-family:'JetBrains Mono','Courier New',monospace; font-size:0.86rem; color:#0f172a; }
+  .small { color:var(--muted); font-size:0.85rem; }
+  .footer { color:var(--muted); font-size:0.78rem; margin-top:40px;
+            border-top:1px solid var(--rule); padding-top:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">System Flowchart · v2</div>
+  <h1>Agent Verification — what runs, where AI is called</h1>
+  <p class="subtitle">
+    One generic workflow engine. 50 tiny YAML configs (one per state). AI is called only on the
+    two steps where determinism fails — never as the default path.
+  </p>
+
+  <!-- KPI tiles -->
+  <div class="grid grid-3">
+    <div class="card-tile card-cyan">
+      <div class="lbl">Code</div><div class="val">1 workflow engine</div>
+      <div class="sub">Same Python code drives all 50 states</div>
+    </div>
+    <div class="card-tile card-violet">
+      <div class="lbl">Config</div><div class="val">50 state YAMLs</div>
+      <div class="sub">~80 lines each, versioned, swappable</div>
+    </div>
+    <div class="card-tile card-mint">
+      <div class="lbl">AI calls per run</div><div class="val">2 hot · 2 cold</div>
+      <div class="sub">Haiku always · Opus only on fallback (~5%)</div>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN FLOWCHART ===================== -->
+  <h2>The verification cycle</h2>
+  <p>From the CRM event to the ledger row. Yellow nodes are where AI is invoked.</p>
+  <div class="mermaid">
+flowchart TD
+  classDef ai fill:#fef3c7,stroke:#f59e0b,color:#7c2d12,stroke-width:2px;
+  classDef det fill:#cffafe,stroke:#06b6d4,color:#0e7490;
+  classDef store fill:#d1fae5,stroke:#10b981,color:#065f46;
+  classDef hitl fill:#fee2e2,stroke:#ef4444,color:#991b1b;
+  classDef config fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6;
+
+  A([CRM event: agent.activated]):::det --> B[Fetch agent metadata]:::det
+  B --> C[Fetch onereal.com profile<br/>Playwright]:::det
+  C --> D{Profile parsed?<br/>extract state + license #}:::det
+  D -- yes --> E[Cross-check<br/>name + state agree?]:::det
+  D -- no --> X[Quarantine to HITL]:::hitl
+
+  E --> F[(Load &lt;state&gt;.yaml<br/>from adapter registry)]:::config
+  F --> G[Router picks browser tier<br/>T1 → T2 → T3 → T4]:::det
+  G --> H[Drive state DRE<br/>fill license #, get results]:::det
+  H --> I{Selectors matched?}:::det
+  I -- yes --> J[Extract expiration date]:::det
+  I -- no --> K[Claude Opus: extract from HTML]:::ai
+  K --> J
+
+  J --> L{Multiple result rows?}:::det
+  L -- 1 row --> M[Use that row]:::det
+  L -- many --> N[Disambiguator<br/>score type+status+name+city]:::det
+  N --> O{Confident pick?}:::det
+  O -- yes --> M
+  O -- low margin --> P[Claude Haiku tiebreak]:::ai
+  P --> M
+
+  M --> Q[Claude Haiku<br/>classify CRM vs DRE expiration]:::ai
+  Q --> R{Verdict}:::det
+  R -- match --> S[(Write ledger row)]:::store
+  R -- mismatch --> X
+  R -- ambiguous --> X
+  S --> T([Done])
+
+  X --> U[Slack alert<br/>action buttons resolve workflow signal]:::hitl
+  </div>
+
+  <!-- ===================== WHERE AI IS CALLED ===================== -->
+  <h2>Where AI is called (and where it isn't)</h2>
+  <p>Today's system has <b>two hot AI paths</b> (run on every verification) and <b>two cold paths</b>
+  (fallback only). Tomorrow's system adds vision and adapter authoring.</p>
+
+  <table>
+    <thead><tr>
+      <th>Stage</th><th>Today</th><th>Tomorrow</th><th>Why AI here</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td>Selector matching</td>
+        <td><span class="pill pill-det">Deterministic</span></td>
+        <td><span class="pill pill-det">Deterministic</span></td>
+        <td>CSS selectors are cheap and fast. AI would be overkill.</td>
+      </tr>
+      <tr>
+        <td>Selector miss / DOM drift</td>
+        <td><span class="pill pill-now">Claude Opus · HTML extract</span></td>
+        <td><span class="pill pill-fut">+ Opus vision (screenshot)</span></td>
+        <td>When CSS misses, an LLM can read the HTML or look at the rendered page and pull the field.</td>
+      </tr>
+      <tr>
+        <td>Disambiguation tiebreak</td>
+        <td><span class="pill pill-det">Scored deterministic</span></td>
+        <td><span class="pill pill-fut">+ Haiku tiebreak before HITL</span></td>
+        <td>If two candidates score within 0.1 of each other, ask a fast LLM before paging a human.</td>
+      </tr>
+      <tr>
+        <td>Expiration comparison</td>
+        <td><span class="pill pill-now">Claude Haiku</span></td>
+        <td><span class="pill pill-now">Claude Haiku</span></td>
+        <td>Date formats vary (<code>June 15, 2026</code> vs <code>2026-06-15</code> vs <code>06/15/2026</code>). LLM classifier handles them robustly.</td>
+      </tr>
+      <tr>
+        <td>New-state adapter authoring</td>
+        <td><span class="pill pill-det">Manual</span></td>
+        <td><span class="pill pill-fut">Claude generates initial YAML</span></td>
+        <td>Engineer reviews and ships. ~30 min instead of ~2 hours per state.</td>
+      </tr>
+      <tr>
+        <td>Anomaly detection on the ledger</td>
+        <td><span class="pill pill-det">Threshold rules</span></td>
+        <td><span class="pill pill-fut">Claude weekly digest</span></td>
+        <td>"30% of WA verifications mismatched this week" — surface narratives, not just numbers.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- ===================== HOW THE 50 STATES MAP ===================== -->
+  <h2>The 50-state routing model</h2>
+  <p>One workflow engine. One profile parser. <b>Fifty YAML configs</b>. The agent's state
+  decides which config gets loaded — the engine code never branches per state.</p>
+
+  <div class="mermaid">
+flowchart LR
+  classDef state fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6;
+  classDef engine fill:#cffafe,stroke:#06b6d4,color:#0e7490;
+  classDef dre fill:#fef3c7,stroke:#f59e0b,color:#7c2d12;
+
+  P([onereal.com profile]):::engine -->|parses state=WA| R1[wa.yaml]:::state
+  P -->|parses state=CA| R2[ca.yaml]:::state
+  P -->|parses state=TX| R3[tx.yaml]:::state
+  P -->|...| R4[+ 47 others]:::state
+
+  R1 --> E[[Same generic runner<br/>Playwright / Camoufox / Browserbase]]:::engine
+  R2 --> E
+  R3 --> E
+  R4 --> E
+
+  E --> D1[professions.dol.wa.gov]:::dre
+  E --> D2[dre.ca.gov]:::dre
+  E --> D3[trec.texas.gov]:::dre
+  E --> D4[... 47 state DREs]:::dre
+  </div>
+
+  <h3>What lives in a state YAML</h3>
+  <p>One file per state. Selectors are lists (multi-fallback). Tier is a single key.
+  Disambiguation rule is declared, not coded.</p>
+
+  <div class="panel" style="font-family:'JetBrains Mono','Courier New',monospace; font-size:0.84rem; white-space:pre; color:#0f172a;">
+state_code: WA
+version: v2
+anti_bot_tier: T2
+dre:
+  search_url: https://professions.dol.wa.gov/s/license-lookup
+  flow: multi_page_detail
+  disambiguation_required: true
+  selectors:
+    license_input_label: License Number
+    license_input:
+      - input#License_Number
+      - lightning-input[data-label*='License'] input
+    detail_link_in_row:
+      - td:first-child a
+    detail_expiration:
+      - text=/Expiration Date:?\s*([A-Za-z]+ \d{1,2},? \d{4})/i</div>
+
+  <!-- ===================== TIER ESCALATION ===================== -->
+  <h2>Tier escalation (per state, automatic)</h2>
+  <p>The router watches each state's success rate. After 3 consecutive failures it bumps the
+  state up a tier. After 3 consecutive successes at the higher tier it bumps back down.</p>
+
+  <div class="mermaid">
+flowchart LR
+  classDef t1 fill:#d1fae5,stroke:#10b981,color:#065f46;
+  classDef t2 fill:#ede9fe,stroke:#8b5cf6,color:#5b21b6;
+  classDef t3 fill:#fef3c7,stroke:#f59e0b,color:#7c2d12;
+  classDef t4 fill:#fee2e2,stroke:#ef4444,color:#991b1b;
+
+  T1[T1 · Playwright<br/>~$0.003 / run]:::t1 -- 3 fails --> T2
+  T2[T2 · Camoufox<br/>~$0.006 / run]:::t2 -- 3 fails --> T3
+  T3[T3 · Browserbase<br/>~$0.04 / run]:::t3 -- can't bypass --> T4
+  T4[T4 · HITL operator<br/>~$5 / run]:::t4
+
+  T2 -- 3 wins --> T1
+  T3 -- 3 wins --> T2
+  </div>
+
+  <!-- ===================== AI vs DETERMINISM ===================== -->
+  <h2>Why this shape</h2>
+  <div class="grid grid-3">
+    <div class="card-tile card-cyan">
+      <div class="lbl">Determinism first</div>
+      <div class="val">Selectors do 95% of the work</div>
+      <div class="sub">CSS is cheap, fast, and audit-friendly. The AI bill stays bounded.</div>
+    </div>
+    <div class="card-tile card-violet">
+      <div class="lbl">AI on fallback</div>
+      <div class="val">Called when selectors miss</div>
+      <div class="sub">Same workflow code path — no branching between "cheap" and "smart."</div>
+    </div>
+    <div class="card-tile card-mint">
+      <div class="lbl">Data, not code</div>
+      <div class="val">50 YAMLs, 1 engine</div>
+      <div class="sub">New state ≈ new YAML. Site redesign ≈ version bump under a flag.</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    Built for an internal review · v2 prototype · all diagrams render in any modern browser via Mermaid.
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, -apple-system, sans-serif',
+      fontSize: '14px',
+      primaryColor: '#cffafe',
+      primaryTextColor: '#0e7490',
+      primaryBorderColor: '#06b6d4',
+      lineColor: '#64748B',
+      tertiaryColor: '#FAFAF9',
+    },
+    flowchart: { curve: 'basis', padding: 12 },
+  });
+</script>
+</body>
+</html>
